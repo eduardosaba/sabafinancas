@@ -11,12 +11,16 @@ import {
   Tag,
   Calendar,
   DollarSign,
+  User,
+  Building2,
+  Plus,
 } from 'lucide-react';
 import { Account, Category, TransactionType } from '@/types/finance';
 import { createTransaction, createTransfer } from '@/lib/services/finance-service';
 import { useEntity } from '@/contexts/entity-context';
 import { useToast } from '@/contexts/toast-context';
 import { CurrencyInput } from '@/components/ui/currency-input';
+import { CompanyModal } from '@/components/companies/company-modal';
 import { cn } from '@/lib/utils';
 
 interface TransactionModalProps {
@@ -34,9 +38,12 @@ export function TransactionModal({
   categories,
   onSuccess,
 }: TransactionModalProps) {
-  const { entity } = useEntity();
+  const { entity, pjEntities, activeCompany, reloadEntities } = useEntity();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState<'EXPENSE' | 'INCOME' | 'TRANSFER'>('EXPENSE');
+  const [selectedEntity, setSelectedEntity] = useState<'PF' | 'PJ'>('PF');
+  const [selectedPjCompanyId, setSelectedPjCompanyId] = useState<string>('');
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
 
   // Form states
   const [amount, setAmount] = useState('');
@@ -50,6 +57,15 @@ export function TransactionModal({
 
   React.useEffect(() => {
     if (isOpen) {
+      if (entity === 'PJ' || (activeCompany && activeCompany.type === 'PJ')) {
+        setSelectedEntity('PJ');
+      } else {
+        setSelectedEntity('PF');
+      }
+
+      const defaultPjId = activeCompany?.id || pjEntities[0]?.id || '22222222-2222-2222-2222-222222222222';
+      setSelectedPjCompanyId(defaultPjId);
+
       if (accounts.length > 0) {
         if (!accountId || !accounts.some((a) => a.id === accountId)) {
           setAccountId(accounts[0].id);
@@ -62,7 +78,7 @@ export function TransactionModal({
         setCategoryId(categories[0].id);
       }
     }
-  }, [isOpen, accounts, categories]);
+  }, [isOpen, accounts, categories, entity, activeCompany, pjEntities]);
 
   if (!isOpen) return null;
 
@@ -76,8 +92,8 @@ export function TransactionModal({
 
     try {
       const targetEntityId =
-        entity === 'PJ'
-          ? '22222222-2222-2222-2222-222222222222'
+        selectedEntity === 'PJ'
+          ? (selectedPjCompanyId || activeCompany?.id || pjEntities[0]?.id || '22222222-2222-2222-2222-222222222222')
           : '11111111-1111-1111-1111-111111111111';
 
       if (activeTab === 'TRANSFER') {
@@ -93,6 +109,7 @@ export function TransactionModal({
         await createTransaction({
           entityId: targetEntityId,
           accountId,
+          destinationAccountId: null,
           categoryId: categoryId || null,
           type: activeTab,
           amount: parsedAmount,
@@ -120,67 +137,139 @@ export function TransactionModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-      <div className="w-full max-w-lg p-6 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl space-y-4">
-        
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-          <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <DollarSign className="h-5 w-5 text-emerald-400" />
-            Novo Lançamento Financeiro
-          </h3>
-          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800">
-            <X className="h-4 w-4" />
-          </button>
-        </div>
+    <>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+        <div className="w-full max-w-lg p-6 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
+          
+          {/* Header */}
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <DollarSign className="h-5 w-5 text-emerald-400" />
+              Novo Lançamento Financeiro
+            </h3>
+            <button onClick={onClose} className="text-slate-400 hover:text-slate-200 p-1 rounded-lg hover:bg-slate-800">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
 
-        {/* 3 Tabs: Despesa, Receita, Transferência */}
-        <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
-          <button
-            type="button"
-            onClick={() => setActiveTab('EXPENSE')}
-            className={cn(
-              'flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all',
-              activeTab === 'EXPENSE'
-                ? 'bg-rose-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+          {/* 3 Tabs: Despesa, Receita, Transferência */}
+          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+            <button
+              type="button"
+              onClick={() => setActiveTab('EXPENSE')}
+              className={cn(
+                'flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all',
+                activeTab === 'EXPENSE'
+                  ? 'bg-rose-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              )}
+            >
+              <ArrowDownRight className="h-4 w-4" />
+              <span>Despesa</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('INCOME')}
+              className={cn(
+                'flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all',
+                activeTab === 'INCOME'
+                  ? 'bg-emerald-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              )}
+            >
+              <ArrowUpRight className="h-4 w-4" />
+              <span>Receita</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setActiveTab('TRANSFER')}
+              className={cn(
+                'flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all',
+                activeTab === 'TRANSFER'
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'text-slate-400 hover:text-slate-200'
+              )}
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+              <span>Transferência</span>
+            </button>
+          </div>
+
+          {/* Entity Selector Section (PF / PJ + Company Selection) */}
+          <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2.5">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-300">Escolha a Entidade de Destino:</span>
+              {selectedEntity === 'PJ' && (
+                <button
+                  type="button"
+                  onClick={() => setIsCompanyModalOpen(true)}
+                  className="text-[11px] font-bold text-emerald-400 hover:text-emerald-300 flex items-center gap-1 hover:underline transition-colors"
+                >
+                  <Plus className="h-3 w-3" />
+                  <span>+ Nova Empresa PJ</span>
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedEntity('PF')}
+                className={cn(
+                  'py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all',
+                  selectedEntity === 'PF'
+                    ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/60 shadow-md ring-1 ring-emerald-500/40'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700 hover:bg-slate-800'
+                )}
+              >
+                <User className="h-4 w-4 text-emerald-400" />
+                <span>Pessoa Física (PF)</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setSelectedEntity('PJ')}
+                className={cn(
+                  'py-2 px-3 rounded-xl text-xs font-bold flex items-center justify-center gap-2 border transition-all',
+                  selectedEntity === 'PJ'
+                    ? 'bg-blue-950/80 text-blue-300 border-blue-500/60 shadow-md ring-1 ring-blue-500/40'
+                    : 'bg-slate-900 text-slate-400 border-slate-800 hover:border-slate-700 hover:bg-slate-800'
+                )}
+              >
+                <Building2 className="h-4 w-4 text-blue-400" />
+                <span>Pessoa Jurídica (PJ)</span>
+              </button>
+            </div>
+
+            {/* PJ Company Dropdown Selection */}
+            {selectedEntity === 'PJ' && (
+              <div className="space-y-1 pt-1 border-t border-slate-800/80">
+                <label className="text-[11px] font-semibold text-slate-400 block">
+                  Qual empresa PJ?
+                </label>
+                <select
+                  value={selectedPjCompanyId}
+                  onChange={(e) => setSelectedPjCompanyId(e.target.value)}
+                  className="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-slate-100 text-xs font-medium focus:outline-none focus:border-blue-500"
+                >
+                  {pjEntities.length > 0 ? (
+                    pjEntities.map((comp) => (
+                      <option key={comp.id} value={comp.id}>
+                        🏢 {comp.name}
+                      </option>
+                    ))
+                  ) : (
+                    <option value="22222222-2222-2222-2222-222222222222">🏢 Empresa PJ Principal</option>
+                  )}
+                </select>
+              </div>
             )}
-          >
-            <ArrowDownRight className="h-4 w-4" />
-            <span>Despesa</span>
-          </button>
+          </div>
 
-          <button
-            type="button"
-            onClick={() => setActiveTab('INCOME')}
-            className={cn(
-              'flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all',
-              activeTab === 'INCOME'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            )}
-          >
-            <ArrowUpRight className="h-4 w-4" />
-            <span>Receita</span>
-          </button>
-
-          <button
-            type="button"
-            onClick={() => setActiveTab('TRANSFER')}
-            className={cn(
-              'flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all',
-              activeTab === 'TRANSFER'
-                ? 'bg-purple-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
-            )}
-          >
-            <ArrowLeftRight className="h-4 w-4" />
-            <span>Transferência</span>
-          </button>
-        </div>
-
-        {/* Form Body */}
-        <form onSubmit={handleSubmit} className="space-y-4">
+          {/* Form Body */}
+          <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
             
             {/* Amount */}
@@ -321,5 +410,17 @@ export function TransactionModal({
 
       </div>
     </div>
+
+    {/* Modal for creating a new PJ company directly on the spot */}
+    <CompanyModal
+      isOpen={isCompanyModalOpen}
+      onClose={() => setIsCompanyModalOpen(false)}
+      onSuccess={async (newCompany) => {
+        await reloadEntities();
+        setSelectedPjCompanyId(newCompany.id);
+        setSelectedEntity('PJ');
+      }}
+    />
+    </>
   );
 }

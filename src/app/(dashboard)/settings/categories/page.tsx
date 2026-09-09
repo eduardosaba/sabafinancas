@@ -117,9 +117,12 @@ export default function CategoriesSettingsPage() {
       </div>
 
       {/* Tabs Subnavigation */}
-      <div className="flex gap-3 border-b border-slate-800 pb-3">
-        <Link href="/settings/accounts" className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-900">
+      <div className="flex gap-2 border-b border-slate-800 pb-3">
+        <Link href="/settings/accounts" className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-900 transition-colors">
           Contas Bancárias
+        </Link>
+        <Link href="/settings/companies" className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-900 transition-colors">
+          Empresas (PJ)
         </Link>
         <Link href="/settings/categories" className="px-3.5 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-white border border-slate-700 shadow-sm">
           Categorias Dinâmicas

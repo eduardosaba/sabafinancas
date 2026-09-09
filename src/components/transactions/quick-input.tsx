@@ -6,6 +6,7 @@ import {
   Sparkles,
   ArrowUpRight,
   ArrowDownRight,
+  ArrowLeftRight,
   Check,
   X,
   Calendar,
@@ -13,12 +14,16 @@ import {
   Tag,
   AlertCircle,
   CheckCircle2,
+  User,
+  Building2,
+  Plus,
 } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Account, Category, ParsedTransaction, Transaction, TransactionType } from '@/types/finance';
 import { parseQuickInput } from '@/lib/parsers/quick-input';
 import { useEntity } from '@/contexts/entity-context';
 import { useToast } from '@/contexts/toast-context';
+import { CompanyModal } from '@/components/companies/company-modal';
 import { cn } from '@/lib/utils';
 
 interface QuickTransactionInputProps {
@@ -32,7 +37,7 @@ export function QuickTransactionInput({
   categories,
   onConfirm,
 }: QuickTransactionInputProps) {
-  const { entity, config } = useEntity();
+  const { entity, config, pjEntities, activeCompany, reloadEntities } = useEntity();
   const { toast } = useToast();
   const [inputValue, setInputValue] = useState('');
   const [parsed, setParsed] = useState<ParsedTransaction | null>(null);
@@ -40,9 +45,13 @@ export function QuickTransactionInput({
 
   // Form state inside preview card for user adjustments
   const [type, setType] = useState<TransactionType>('EXPENSE');
+  const [selectedEntity, setSelectedEntity] = useState<'PF' | 'PJ'>('PF');
+  const [selectedPjCompanyId, setSelectedPjCompanyId] = useState<string>('');
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
   const [amount, setAmount] = useState<number>(0);
   const [description, setDescription] = useState<string>('');
   const [accountId, setAccountId] = useState<string>('');
+  const [destinationAccountId, setDestinationAccountId] = useState<string>('');
   const [categoryId, setCategoryId] = useState<string>('');
   const [date, setDate] = useState<string>('');
   const [status, setStatus] = useState<'PAID' | 'PENDING'>('PAID');
@@ -79,10 +88,28 @@ export function QuickTransactionInput({
     setType(result.type);
     setAmount(result.amount);
     setDescription(result.description);
-    setAccountId(result.accountId || displayAccounts[0]?.id || '');
+    
+    const pickedAccId = result.accountId || displayAccounts[0]?.id || '';
+    setAccountId(pickedAccId);
+    setDestinationAccountId(displayAccounts.find((a) => a.id !== pickedAccId)?.id || '');
     setCategoryId(result.categoryId || categories[0]?.id || '');
     setDate(result.date);
     setStatus(result.status || 'PAID');
+
+    // Default selectedEntity from context, or account entity if CONSOLIDATED
+    if (entity === 'PJ') {
+      setSelectedEntity('PJ');
+    } else if (entity === 'PF') {
+      setSelectedEntity('PF');
+    } else {
+      const acc = displayAccounts.find((a) => a.id === pickedAccId);
+      if (acc?.entityId === 'PJ' || acc?.entityId === '22222222-2222-2222-2222-222222222222') {
+        setSelectedEntity('PJ');
+      } else {
+        setSelectedEntity('PF');
+      }
+    }
+
     setShowPreview(true);
   };
 
@@ -109,18 +136,16 @@ export function QuickTransactionInput({
       return;
     }
 
-    const selectedAccount = displayAccounts.find((a) => a.id === accountId) || displayAccounts[0];
-    let txEntity = entity === 'CONSOLIDATED' ? 'PF' : entity;
-    if (selectedAccount?.entityId === '22222222-2222-2222-2222-222222222222' || selectedAccount?.entityId === 'PJ') {
-      txEntity = 'PJ';
-    } else if (selectedAccount?.entityId === '11111111-1111-1111-1111-111111111111' || selectedAccount?.entityId === 'PF') {
-      txEntity = 'PF';
-    }
+    const targetEntityId =
+      selectedEntity === 'PJ'
+        ? (selectedPjCompanyId || activeCompany?.id || pjEntities[0]?.id || '22222222-2222-2222-2222-222222222222')
+        : '11111111-1111-1111-1111-111111111111';
 
     const newTx: Omit<Transaction, 'id' | 'createdAt'> = {
       userId: 'user-default-1',
-      entityId: txEntity,
-      accountId: accountId || filteredAccounts[0]?.id || '',
+      entityId: targetEntityId,
+      accountId: accountId || displayAccounts[0]?.id || '',
+      destinationAccountId: type === 'TRANSFER' ? destinationAccountId || null : null,
       categoryId: categoryId || categories[0]?.id || null,
       type,
       amount,
@@ -235,6 +260,70 @@ export function QuickTransactionInput({
           {/* Editable Fields Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3 text-xs">
             
+            {/* Entity selector (PF vs PJ) */}
+            <div className="space-y-1">
+              <label className="text-[11px] font-semibold text-slate-400 block">Entidade</label>
+              <div className="flex rounded-lg bg-slate-950 p-1 border border-slate-800">
+                <button
+                  type="button"
+                  onClick={() => setSelectedEntity('PF')}
+                  className={cn(
+                    'flex-1 py-1.5 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-all',
+                    selectedEntity === 'PF'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  )}
+                >
+                  <User className="h-3.5 w-3.5" />
+                  <span>PF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEntity('PJ')}
+                  className={cn(
+                    'flex-1 py-1.5 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-all',
+                    selectedEntity === 'PJ'
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  )}
+                >
+                  <Building2 className="h-3.5 w-3.5" />
+                  <span>PJ</span>
+                </button>
+              </div>
+
+              {selectedEntity === 'PJ' && (
+                <div className="pt-1 space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] text-slate-400 font-semibold">Empresa PJ:</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsCompanyModalOpen(true)}
+                      className="text-[10px] font-bold text-emerald-400 hover:underline flex items-center gap-0.5"
+                    >
+                      <Plus className="h-2.5 w-2.5" />
+                      <span>+ Nova</span>
+                    </button>
+                  </div>
+                  <select
+                    value={selectedPjCompanyId}
+                    onChange={(e) => setSelectedPjCompanyId(e.target.value)}
+                    className="w-full px-2 py-1 rounded-md bg-slate-950 border border-slate-800 text-slate-200 text-[11px] font-medium focus:outline-none focus:border-blue-500"
+                  >
+                    {pjEntities.length > 0 ? (
+                      pjEntities.map((comp) => (
+                        <option key={comp.id} value={comp.id}>
+                          🏢 {comp.name}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="22222222-2222-2222-2222-222222222222">🏢 PJ Principal</option>
+                    )}
+                  </select>
+                </div>
+              )}
+            </div>
+
             {/* Type selector */}
             <div className="space-y-1">
               <label className="text-[11px] font-semibold text-slate-400 block">Tipo</label>
@@ -265,6 +354,19 @@ export function QuickTransactionInput({
                   <ArrowUpRight className="h-3.5 w-3.5" />
                   <span>Receita</span>
                 </button>
+                <button
+                  type="button"
+                  onClick={() => setType('TRANSFER')}
+                  className={cn(
+                    'flex-1 py-1.5 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-all',
+                    type === 'TRANSFER'
+                      ? 'bg-purple-600 text-white shadow-sm'
+                      : 'text-slate-400 hover:text-slate-200'
+                  )}
+                >
+                  <ArrowLeftRight className="h-3.5 w-3.5" />
+                  <span>Transf.</span>
+                </button>
               </div>
             </div>
 
@@ -279,7 +381,7 @@ export function QuickTransactionInput({
             </div>
 
             {/* Description */}
-            <div className="space-y-1 sm:col-span-2">
+            <div className="space-y-1 sm:col-span-1">
               <label className="text-[11px] font-semibold text-slate-400 block">Descrição</label>
               <input
                 type="text"
@@ -293,14 +395,14 @@ export function QuickTransactionInput({
             <div className="space-y-1">
               <label className="text-[11px] font-semibold text-slate-400 block flex items-center gap-1">
                 <Wallet className="h-3 w-3 text-blue-400" />
-                Conta Bancária
+                {type === 'TRANSFER' ? 'Conta de Origem' : 'Conta Bancária'}
               </label>
               <select
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 className="w-full px-2.5 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs font-medium focus:outline-none focus:border-emerald-500"
               >
-                {displayAccounts.map((acc) => {
+                {accounts.map((acc) => {
                   const isPJ = acc.entityId === 'PJ' || acc.entityId === '22222222-2222-2222-2222-222222222222';
                   return (
                     <option key={acc.id} value={acc.id}>
@@ -310,6 +412,30 @@ export function QuickTransactionInput({
                 })}
               </select>
             </div>
+
+            {/* Destination Account (If Transfer) */}
+            {type === 'TRANSFER' && (
+              <div className="space-y-1">
+                <label className="text-[11px] font-semibold text-slate-400 block flex items-center gap-1">
+                  <Wallet className="h-3 w-3 text-purple-400" />
+                  Conta de Destino
+                </label>
+                <select
+                  value={destinationAccountId}
+                  onChange={(e) => setDestinationAccountId(e.target.value)}
+                  className="w-full px-2.5 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs font-medium focus:outline-none focus:border-emerald-500"
+                >
+                  {accounts.map((acc) => {
+                    const isPJ = acc.entityId === 'PJ' || acc.entityId === '22222222-2222-2222-2222-222222222222';
+                    return (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.name} ({isPJ ? 'PJ' : 'PF'})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
 
             {/* Category dropdown */}
             <div className="space-y-1">
@@ -400,6 +526,16 @@ export function QuickTransactionInput({
         </div>
       )}
 
+      {/* Modal to register new PJ company directly from quick input */}
+      <CompanyModal
+        isOpen={isCompanyModalOpen}
+        onClose={() => setIsCompanyModalOpen(false)}
+        onSuccess={async (newCompany) => {
+          await reloadEntities();
+          setSelectedPjCompanyId(newCompany.id);
+          setSelectedEntity('PJ');
+        }}
+      />
     </div>
   );
 }

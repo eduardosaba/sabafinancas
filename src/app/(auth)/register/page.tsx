@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Wallet, Mail, Lock, UserPlus, AlertCircle, ShieldCheck, CheckCircle2 } from 'lucide-react';
 import { createClient } from '@/lib/supabase/client';
+import { translateAuthError } from '@/lib/auth-errors';
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -59,7 +60,7 @@ export default function RegisterPage() {
             <Wallet className="h-7 w-7" />
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-white">Criar Nova Conta</h1>
-          <p className="text-xs text-slate-400">Controle Financeiro Completo PF / PJ</p>
+          <p className="text-xs text-slate-400">Saba Controle Financeiro Completo PF / PJ</p>
         </div>
 
         {/* Form Card */}

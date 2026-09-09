@@ -15,27 +15,42 @@ import {
   Settings,
   Plus,
   LogOut,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
-import { useEntity, EntityType, ENTITY_CONFIGS } from '@/contexts/entity-context';
+import { useEntity, EntityType } from '@/contexts/entity-context';
 import { useDateFilter, DatePeriodOption } from '@/contexts/date-filter-context';
 import { TransactionModal } from '@/components/transactions/transaction-modal';
+import { CompanyModal } from '@/components/companies/company-modal';
 import { PendingPaymentsSidebarWidget } from '@/components/layout/pending-sidebar-widget';
-import { fetchAccounts, fetchCategories } from '@/lib/services/finance-service';
+import { fetchAccounts, fetchCategories, ensureUserExistsInDb } from '@/lib/services/finance-service';
 import { createClient } from '@/lib/supabase/client';
 import { Account, Category } from '@/types/finance';
 import { cn } from '@/lib/utils';
 
 export function Header() {
-  const { entity, setEntity, config } = useEntity();
+  const {
+    entity,
+    setEntity,
+    config,
+    pjEntities,
+    activeCompany,
+    selectCompany,
+    reloadEntities,
+  } = useEntity();
   const { filter, setPeriod } = useDateFilter();
   const pathname = usePathname();
   const router = useRouter();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [isCompanyModalOpen, setIsCompanyModalOpen] = useState(false);
+  const [isCompanyDropdownOpen, setIsCompanyDropdownOpen] = useState(false);
   const [modalAccounts, setModalAccounts] = useState<Account[]>([]);
   const [modalCategories, setModalCategories] = useState<Category[]>([]);
   const [userName, setUserName] = useState<string | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(null);
+
+  const isPjActive = entity !== 'PF' && entity !== '11111111-1111-1111-1111-111111111111' && entity !== 'CONSOLIDATED';
 
   React.useEffect(() => {
     async function loadUser() {
@@ -49,7 +64,11 @@ export function Header() {
           setUserEmail(user.email || null);
           let name = user.user_metadata?.name || user.user_metadata?.full_name;
 
-          if (!name) {
+          if (user.email === 'eduardopedro.fsa@gmail.com' || user.email?.includes('eduardopedro') || user.email?.includes('eduardosaba')) {
+            name = 'Eduardo Saba';
+          } else if (user.email?.includes('melsaba')) {
+            name = 'Mel Saba';
+          } else if (!name) {
             const { data: dbUser } = await supabase
               .from('users')
               .select('name')
@@ -70,7 +89,14 @@ export function Header() {
               .join(' ');
           }
 
-          setUserName(name || 'Usuário');
+          const finalName = name || 'Usuário';
+          setUserName(finalName);
+
+          // Sync auth user to public.users table automatically
+          await ensureUserExistsInDb(supabase, user.id, {
+            email: user.email,
+            name: finalName,
+          });
         }
       } catch (err) {
         console.error('Error fetching user in Header:', err);
@@ -131,16 +157,17 @@ export function Header() {
             </Link>
           </div>
 
-          {/* Entity Selector (PF / PJ / CONSOLIDATED) */}
+          {/* Entity Selector (PF / PJ Dropdown / CONSOLIDATED) */}
           <div className="flex items-center">
-            <div className="inline-flex p-1 rounded-xl bg-slate-900 border border-slate-800 shadow-inner">
+            <div className="inline-flex p-1 rounded-xl bg-slate-900 border border-slate-800 shadow-inner relative">
               
+              {/* PF Button */}
               <button
                 type="button"
                 onClick={() => setEntity('PF')}
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
-                  entity === 'PF'
+                  (entity === 'PF' || entity === '11111111-1111-1111-1111-111111111111')
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950 ring-1 ring-emerald-400/50'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                 )}
@@ -149,20 +176,91 @@ export function Header() {
                 <span>Pessoal (PF)</span>
               </button>
 
-              <button
-                type="button"
-                onClick={() => setEntity('PJ')}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
-                  entity === 'PJ'
-                    ? 'bg-blue-600 text-white shadow-md shadow-blue-950 ring-1 ring-blue-400/50'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
-                )}
-              >
-                <Building2 className="h-3.5 w-3.5" />
-                <span>Empresa (PJ)</span>
-              </button>
+              {/* PJ Companies Dropdown Trigger */}
+              <div className="relative flex items-center">
+                <button
+                  type="button"
+                  onClick={() => setIsCompanyDropdownOpen(!isCompanyDropdownOpen)}
+                  className={cn(
+                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
+                    isPjActive
+                      ? 'bg-blue-600 text-white shadow-md shadow-blue-950 ring-1 ring-blue-400/50'
+                      : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                  )}
+                >
+                  <Building2 className="h-3.5 w-3.5" />
+                  <span>
+                    {activeCompany ? activeCompany.name : 'Empresa (PJ)'}
+                  </span>
+                  <ChevronDown className="h-3 w-3 ml-0.5" />
+                </button>
 
+                <button
+                  type="button"
+                  onClick={() => setIsCompanyModalOpen(true)}
+                  className="ml-1 p-1 rounded-md text-emerald-400 hover:bg-emerald-950/60 hover:text-emerald-300 transition-colors"
+                  title="Cadastrar Nova Empresa (PJ)"
+                >
+                  <Plus className="h-3.5 w-3.5" />
+                </button>
+
+                {/* Dropdown Menu */}
+                {isCompanyDropdownOpen && (
+                  <div
+                    className="absolute top-full left-0 mt-2 w-56 rounded-xl bg-slate-900 border border-slate-700 shadow-2xl p-1.5 z-50 space-y-1 animate-in fade-in zoom-in-95 duration-150"
+                    onMouseLeave={() => setIsCompanyDropdownOpen(false)}
+                  >
+                    <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                      Suas Empresas (PJ)
+                    </div>
+
+                    {pjEntities.length === 0 ? (
+                      <div className="px-2.5 py-2 text-xs text-slate-400 italic">
+                        Nenhuma empresa cadastrada
+                      </div>
+                    ) : (
+                      pjEntities.map((comp) => {
+                        const isSelected = entity === comp.id || (isPjActive && activeCompany?.id === comp.id);
+                        return (
+                          <button
+                            key={comp.id}
+                            type="button"
+                            onClick={() => {
+                              selectCompany(comp.id);
+                              setIsCompanyDropdownOpen(false);
+                            }}
+                            className={cn(
+                              'w-full text-left px-2.5 py-2 rounded-lg text-xs font-semibold flex items-center justify-between transition-colors',
+                              isSelected
+                                ? 'bg-blue-950/80 text-blue-300 border border-blue-500/40'
+                                : 'text-slate-300 hover:bg-slate-800 hover:text-slate-100'
+                            )}
+                          >
+                            <span className="truncate">{comp.name}</span>
+                            {isSelected && <Check className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />}
+                          </button>
+                        );
+                      })
+                    )}
+
+                    <div className="pt-1 border-t border-slate-800">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsCompanyDropdownOpen(false);
+                          setIsCompanyModalOpen(true);
+                        }}
+                        className="w-full text-left px-2.5 py-2 rounded-lg text-xs font-bold text-emerald-400 hover:bg-emerald-950/60 hover:text-emerald-300 flex items-center gap-1.5 transition-colors"
+                      >
+                        <Plus className="h-3.5 w-3.5" />
+                        <span>+ Cadastrar Empresa</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Consolidado Button */}
               <button
                 type="button"
                 onClick={() => setEntity('CONSOLIDATED')}
@@ -213,12 +311,22 @@ export function Header() {
 
             {/* Profile & SignOut */}
             <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
-              <div
-                title={userEmail ? `${userName} (${userEmail})` : userName || 'Usuário Autenticado'}
-                className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-900 to-slate-800 text-emerald-300 border border-slate-700 font-semibold text-xs shadow-sm uppercase"
-              >
-                {userInitials}
-              </div>
+              {userEmail?.includes('melsaba') ? (
+                <div className="relative h-8 w-8 rounded-full overflow-hidden border border-blue-500/50 flex-shrink-0 bg-slate-800 shadow-sm transition-transform duration-300 transform hover:scale-[2] hover:z-50 cursor-pointer origin-center" title={userName || 'Mel Saba'}>
+                  <img src="/avatars/avatar_mel.png" alt="Mel Saba" className="w-full h-full object-cover object-top" />
+                </div>
+              ) : (userEmail?.includes('eduardopedro') || userEmail?.includes('eduardosaba')) ? (
+                <div className="relative h-8 w-8 rounded-full overflow-hidden border border-emerald-500/50 flex-shrink-0 bg-slate-800 shadow-sm transition-transform duration-300 transform hover:scale-[2] hover:z-50 cursor-pointer origin-center" title={userName || 'Eduardo Saba'}>
+                  <img src="/avatars/avatar_eduardo.png" alt="Eduardo Saba" className="w-full h-full object-cover object-top" />
+                </div>
+              ) : (
+                <div
+                  title={userEmail ? `${userName} (${userEmail})` : userName || 'Usuário Autenticado'}
+                  className="relative flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-tr from-emerald-900 to-slate-800 text-emerald-300 border border-slate-700 font-semibold text-xs shadow-sm uppercase transition-transform duration-300 transform hover:scale-[2] hover:z-50 cursor-pointer origin-center"
+                >
+                  {userInitials}
+                </div>
+              )}
               {userName && (
                 <span className="hidden xl:inline-block text-xs text-slate-300 font-semibold truncate max-w-[140px]">
                   {userName}
@@ -247,6 +355,16 @@ export function Header() {
         categories={modalCategories}
         onSuccess={() => {
           if (typeof window !== 'undefined') window.location.reload();
+        }}
+      />
+
+      {/* Company Creation Modal */}
+      <CompanyModal
+        isOpen={isCompanyModalOpen}
+        onClose={() => setIsCompanyModalOpen(false)}
+        onSuccess={async (newComp) => {
+          await reloadEntities();
+          selectCompany(newComp.id);
         }}
       />
     </>

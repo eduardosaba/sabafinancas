@@ -15,6 +15,11 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: 'Saba Finanças PF/PJ - Controle Financeiro',
   description: 'Gestão Financeira integrada de Pessoa Física e Jurídica.',
+  icons: {
+    icon: '/icon.svg',
+    shortcut: '/icon.svg',
+    apple: '/icon.svg',
+  },
   manifest: '/manifest.json',
   appleWebApp: {
     capable: true,

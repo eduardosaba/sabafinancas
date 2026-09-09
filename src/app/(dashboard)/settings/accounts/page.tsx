@@ -35,7 +35,7 @@ function renderEntityBadge(entityId: string) {
 import { useToast } from '@/contexts/toast-context';
 
 export default function AccountsSettingsPage() {
-  const { entity, config, isHydrated } = useEntity();
+  const { entity, config, isHydrated, pjEntities, activeCompany } = useEntity();
   const { toast, confirm } = useToast();
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -46,7 +46,11 @@ export default function AccountsSettingsPage() {
   const [accountType, setAccountType] = useState<AccountType>('CHECKING');
   const [initialBalance, setInitialBalance] = useState('0.00');
   const [colorHex, setColorHex] = useState('#3b82f6');
-  const [targetEntity, setTargetEntity] = useState<'PF' | 'PJ'>(entity === 'PJ' ? 'PJ' : 'PF');
+  const [targetEntity, setTargetEntity] = useState<string>(
+    entity !== 'PF' && entity !== '11111111-1111-1111-1111-111111111111' && entity !== 'CONSOLIDATED'
+      ? entity
+      : activeCompany?.id || 'PJ'
+  );
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const [filterTab, setFilterTab] = useState<'ALL' | 'PF' | 'PJ'>('ALL');
@@ -78,7 +82,7 @@ export default function AccountsSettingsPage() {
   const filteredAccounts = useMemo(() => {
     if (filterTab === 'ALL') return accounts;
     return accounts.filter((a) => {
-      const isPJ = a.entityId === 'PJ' || a.entityId === '22222222-2222-2222-2222-222222222222';
+      const isPJ = a.entityId !== '11111111-1111-1111-1111-111111111111' && a.entityId !== 'PF';
       return filterTab === 'PJ' ? isPJ : !isPJ;
     });
   }, [accounts, filterTab]);
@@ -89,10 +93,12 @@ export default function AccountsSettingsPage() {
 
     setIsSubmitting(true);
     try {
-      const targetEntityId =
-        targetEntity === 'PJ'
-          ? '22222222-2222-2222-2222-222222222222'
-          : '11111111-1111-1111-1111-111111111111';
+      let targetEntityId = targetEntity;
+      if (targetEntity === 'PF') {
+        targetEntityId = '11111111-1111-1111-1111-111111111111';
+      } else if (targetEntity === 'PJ') {
+        targetEntityId = activeCompany?.id || '22222222-2222-2222-2222-222222222222';
+      }
 
       await createAccount({
         entityId: targetEntityId,
@@ -191,11 +197,14 @@ export default function AccountsSettingsPage() {
 
       {/* Tabs Subnavigation */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-        <div className="flex gap-3">
+        <div className="flex gap-2">
           <Link href="/settings/accounts" className="px-3.5 py-1.5 rounded-lg bg-slate-800 text-xs font-semibold text-white border border-slate-700 shadow-sm">
             Contas Bancárias
           </Link>
-          <Link href="/settings/categories" className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-900">
+          <Link href="/settings/companies" className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-900 transition-colors">
+            Empresas (PJ)
+          </Link>
+          <Link href="/settings/categories" className="px-3.5 py-1.5 rounded-lg text-xs font-medium text-slate-400 hover:text-white hover:bg-slate-900 transition-colors">
             Categorias Dinâmicas
           </Link>
         </div>
@@ -431,14 +440,22 @@ export default function AccountsSettingsPage() {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="font-semibold text-slate-300 block">Entidade</label>
+                  <label className="font-semibold text-slate-300 block">Entidade / Empresa</label>
                   <select
                     value={targetEntity}
-                    onChange={(e) => setTargetEntity(e.target.value as 'PF' | 'PJ')}
+                    onChange={(e) => setTargetEntity(e.target.value)}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:border-emerald-500"
                   >
                     <option value="PF">Pessoa Física (PF)</option>
-                    <option value="PJ">Pessoa Jurídica (PJ)</option>
+                    {pjEntities.length === 0 ? (
+                      <option value="PJ">Pessoa Jurídica (PJ Geral)</option>
+                    ) : (
+                      pjEntities.map((comp) => (
+                        <option key={comp.id} value={comp.id}>
+                          PJ: {comp.name}
+                        </option>
+                      ))
+                    )}
                   </select>
                 </div>
               </div>

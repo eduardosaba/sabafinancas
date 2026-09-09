@@ -76,40 +76,38 @@ export async function ensureUserExistsInDb(
 ): Promise<void> {
   if (!userId) return;
   try {
-    const { data: existing } = await supabase
-      .from('users')
-      .select('id')
-      .eq('id', userId)
-      .maybeSingle();
+    let email = userInfo?.email;
+    let name = userInfo?.name;
 
-    if (!existing) {
-      let email = userInfo?.email;
-      let name = userInfo?.name;
-
-      if (!email || !name) {
-        try {
-          const {
-            data: { user },
-          } = await supabase.auth.getUser();
-          if (user && user.id === userId) {
-            email = email || user.email;
-            name = name || user.user_metadata?.name || user.user_metadata?.full_name;
-          }
-        } catch {}
-      }
-
-      email = email || `user_${userId.slice(0, 8)}@financas.com.br`;
-      name = name || email.split('@')[0] || 'Usuário';
-
-      await supabase.from('users').upsert(
-        {
-          id: userId,
-          email,
-          name,
-        },
-        { onConflict: 'id' }
-      );
+    if (!email || !name) {
+      try {
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+        if (user && user.id === userId) {
+          email = email || user.email;
+          name = name || user.user_metadata?.name || user.user_metadata?.full_name;
+        }
+      } catch {}
     }
+
+    if (email === 'eduardopedro.fsa@gmail.com' || email?.includes('eduardopedro') || email?.includes('eduardosaba')) {
+      name = 'Eduardo Saba';
+    } else if (email?.includes('melsaba')) {
+      name = 'Mel Saba';
+    }
+
+    email = email || `user_${userId.slice(0, 8)}@financas.com.br`;
+    name = name || email.split('@')[0] || 'Usuário';
+
+    await supabase.from('users').upsert(
+      {
+        id: userId,
+        email,
+        name,
+      },
+      { onConflict: 'email' }
+    );
   } catch (err) {
     console.warn('Failed to ensure user exists in public.users:', err);
   }
@@ -140,12 +138,18 @@ async function getAuthUserId(supabase: ReturnType<typeof createClient>): Promise
   return fallbackId;
 }
 
+export interface CreateEntityInput {
+  name: string;
+  type: 'PF' | 'PJ';
+  userId?: string;
+}
+
 // -------------------------------------------------------------
 // ENTITIES
 // -------------------------------------------------------------
 export async function fetchEntities(): Promise<Entity[]> {
   const supabase = createClient();
-  const { data, error } = await supabase.from('entities').select('*');
+  const { data, error } = await supabase.from('entities').select('*').order('created_at', { ascending: true });
   if (error) {
     console.error('Erro detalhado Supabase (fetchEntities):', error);
     throw new Error(`Falha ao buscar entidades do Supabase: ${error.message}`);
@@ -157,6 +161,37 @@ export async function fetchEntities(): Promise<Entity[]> {
     type: item.type,
     createdAt: item.created_at,
   }));
+}
+
+export async function createEntity(input: CreateEntityInput): Promise<Entity> {
+  const supabase = createClient();
+  const userId = input.userId || (await getAuthUserId(supabase));
+  await ensureUserExistsInDb(supabase, userId);
+
+  const payload = {
+    user_id: userId,
+    name: input.name,
+    type: input.type,
+  };
+
+  const { data, error } = await supabase
+    .from('entities')
+    .insert(payload)
+    .select()
+    .single();
+
+  if (error) {
+    console.error('Erro detalhado Supabase (createEntity):', error);
+    throw new Error(`Falha ao cadastrar empresa no Supabase: ${error.message}`);
+  }
+
+  return {
+    id: data.id,
+    userId: data.user_id,
+    name: data.name,
+    type: data.type,
+    createdAt: data.created_at,
+  };
 }
 
 // -------------------------------------------------------------
@@ -599,6 +634,15 @@ export async function updateTransaction(
   if (updates.type !== undefined) dbPayload.type = updates.type;
   if (updates.categoryId !== undefined) dbPayload.category_id = updates.categoryId;
   if (updates.accountId !== undefined) dbPayload.account_id = updates.accountId;
+  if (updates.destinationAccountId !== undefined) dbPayload.destination_account_id = updates.destinationAccountId;
+  if (updates.debtInstallmentId !== undefined) dbPayload.debt_installment_id = updates.debtInstallmentId;
+  if (updates.entityId !== undefined) {
+    dbPayload.entity_id = isValidUUID(updates.entityId)
+      ? updates.entityId
+      : updates.entityId === 'PJ'
+      ? '22222222-2222-2222-2222-222222222222'
+      : '11111111-1111-1111-1111-111111111111';
+  }
   if (updates.transactionDate !== undefined) dbPayload.transaction_date = updates.transactionDate;
   if (updates.status !== undefined) dbPayload.status = updates.status;
 
@@ -964,4 +1008,10 @@ export async function deleteDebt(debtId: string): Promise<boolean> {
   }
 
   return true;
+}
+
+export async function fetchUsers(): Promise<{ id: string; name: string; email: string }[]> {
+  const supabase = createClient();
+  const { data } = await supabase.from('users').select('id, name, email');
+  return data || [];
 }

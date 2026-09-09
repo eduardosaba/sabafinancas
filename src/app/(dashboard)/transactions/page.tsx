@@ -17,6 +17,8 @@ import {
   AlertTriangle,
   Plus,
   Sparkles,
+  User,
+  Building2,
 } from 'lucide-react';
 import { useEntity } from '@/contexts/entity-context';
 import { useDateFilter } from '@/contexts/date-filter-context';
@@ -27,6 +29,7 @@ import {
   fetchAccounts,
   fetchCategories,
   fetchTransactions,
+  fetchUsers,
   updateTransaction,
 } from '@/lib/services/finance-service';
 import { TransactionModal } from '@/components/transactions/transaction-modal';
@@ -36,13 +39,14 @@ import { useToast } from '@/contexts/toast-context';
 import { cn } from '@/lib/utils';
 
 export default function TransactionsPage() {
-  const { entity, config, isHydrated } = useEntity();
+  const { entity, config, isHydrated, pjEntities, activeCompany } = useEntity();
   const { filter } = useDateFilter();
   const { toast } = useToast();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [usersMap, setUsersMap] = useState<Record<string, string>>({});
   const [isLoading, setIsLoading] = useState(true);
 
   // Filters & Search
@@ -52,6 +56,8 @@ export default function TransactionsPage() {
 
   // Edit Modal State
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
+  const [editEntity, setEditEntity] = useState<'PF' | 'PJ'>('PF');
+  const [editPjCompanyId, setEditPjCompanyId] = useState<string>('');
   const [editDescription, setEditDescription] = useState('');
   const [editAmount, setEditAmount] = useState('');
   const [editAccountId, setEditAccountId] = useState('');
@@ -69,7 +75,7 @@ export default function TransactionsPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [txs, accs, cats] = await Promise.all([
+      const [txs, accs, cats, usersList] = await Promise.all([
         fetchTransactions({
           entityType: entity,
           startDate: filter.startDate,
@@ -77,10 +83,20 @@ export default function TransactionsPage() {
         }),
         fetchAccounts('CONSOLIDATED'),
         fetchCategories('CONSOLIDATED'),
+        fetchUsers().catch(() => []),
       ]);
       setTransactions(txs);
       setAccounts(accs);
       setCategories(cats);
+
+      const uMap: Record<string, string> = {};
+      usersList.forEach((u) => {
+        let name = u.name;
+        if (u.email?.includes('eduardopedro') || u.email?.includes('eduardosaba')) name = 'Eduardo Saba';
+        if (u.email?.includes('melsaba')) name = 'Mel Saba';
+        uMap[u.id] = name || u.email || 'Usuário';
+      });
+      setUsersMap(uMap);
     } catch (err) {
       console.error('Error loading transactions:', err);
     } finally {
@@ -150,6 +166,15 @@ export default function TransactionsPage() {
     setEditAccountId(tx.accountId);
     setEditCategoryId(tx.categoryId || '');
     setEditDate(tx.transactionDate);
+
+    const isPJ = tx.entityId === 'PJ' || tx.entityId === '22222222-2222-2222-2222-222222222222' || pjEntities.some((e) => e.id === tx.entityId);
+    if (isPJ) {
+      setEditEntity('PJ');
+      setEditPjCompanyId(pjEntities.some((e) => e.id === tx.entityId) ? tx.entityId : (activeCompany?.id || pjEntities[0]?.id || '22222222-2222-2222-2222-222222222222'));
+    } else {
+      setEditEntity('PF');
+      setEditPjCompanyId(activeCompany?.id || pjEntities[0]?.id || '22222222-2222-2222-2222-222222222222');
+    }
   };
 
   // Handle Edit Submit
@@ -160,6 +185,10 @@ export default function TransactionsPage() {
     const parsedAmount = parseFloat(editAmount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) return;
 
+    const targetEntityId = editEntity === 'PJ'
+      ? (editPjCompanyId || activeCompany?.id || pjEntities[0]?.id || '22222222-2222-2222-2222-222222222222')
+      : '11111111-1111-1111-1111-111111111111';
+
     setIsSubmittingEdit(true);
     try {
       await updateTransaction(editingTx.id, {
@@ -168,12 +197,15 @@ export default function TransactionsPage() {
         accountId: editAccountId,
         categoryId: editCategoryId || null,
         transactionDate: editDate,
+        entityId: targetEntityId,
       });
 
       setEditingTx(null);
+      toast.success('Lançamento atualizado com sucesso!', 'Edição Concluída');
       await loadData();
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error saving transaction edit:', err);
+      toast.error(`Falha ao salvar edição: ${err?.message || 'Erro Supabase'}`);
     } finally {
       setIsSubmittingEdit(false);
     }
@@ -236,14 +268,16 @@ export default function TransactionsPage() {
           categories={categories}
           onConfirm={async (newTxData) => {
             const targetEntityId =
-              newTxData.entityId === 'PJ'
+              newTxData.entityId === 'PJ' || newTxData.entityId === '22222222-2222-2222-2222-222222222222'
                 ? '22222222-2222-2222-2222-222222222222'
                 : '11111111-1111-1111-1111-111111111111';
 
             await createTransaction({
               entityId: targetEntityId,
               accountId: newTxData.accountId,
-              categoryId: newTxData.categoryId,
+              destinationAccountId: newTxData.destinationAccountId || null,
+              categoryId: newTxData.categoryId || null,
+              debtInstallmentId: newTxData.debtInstallmentId || null,
               type: newTxData.type,
               amount: newTxData.amount,
               transactionDate: newTxData.transactionDate,
@@ -391,6 +425,7 @@ export default function TransactionsPage() {
                   <th className="px-4 py-3">Conta Bancária</th>
                   <th className="px-4 py-3">Categoria</th>
                   <th className="px-4 py-3">Data</th>
+                  <th className="px-4 py-3">Lançado Por</th>
                   <th className="px-4 py-3">Status</th>
                   <th className="px-4 py-3 text-right">Valor</th>
                   <th className="px-4 py-3 text-center rounded-r-lg">Ações</th>
@@ -430,6 +465,11 @@ export default function TransactionsPage() {
                       {/* Description */}
                       <td className="px-4 py-3 font-semibold text-slate-100">
                         {tx.description}
+                        {tx.debtInstallmentId && (
+                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-950 text-purple-300 border border-purple-800/50">
+                            Dívida/Parcela
+                          </span>
+                        )}
                       </td>
 
                       {/* Account / Destination Account */}
@@ -450,6 +490,13 @@ export default function TransactionsPage() {
                       {/* Date */}
                       <td className="px-4 py-3 text-slate-400 font-mono">
                         {tx.transactionDate}
+                      </td>
+
+                      {/* Launched By User */}
+                      <td className="px-4 py-3 text-slate-300 font-semibold text-[11px]">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-slate-950 border border-slate-800 text-slate-300 font-medium">
+                          {usersMap[tx.userId] || 'Eduardo Saba'}
+                        </span>
                       </td>
 
                       {/* Status */}
@@ -546,6 +593,61 @@ export default function TransactionsPage() {
             </div>
 
             <div className="space-y-3 text-xs">
+              {/* Entity Selector (PF / PJ) */}
+              <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-2">
+                <label className="font-semibold text-slate-300 block text-xs">Entidade do Lançamento</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setEditEntity('PF')}
+                    className={cn(
+                      'py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all',
+                      editEntity === 'PF'
+                        ? 'bg-emerald-950 text-emerald-300 border-emerald-500/60 shadow-sm ring-1 ring-emerald-500/30'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+                    )}
+                  >
+                    <User className="h-3.5 w-3.5 text-emerald-400" />
+                    <span>PF (Pessoal)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setEditEntity('PJ')}
+                    className={cn(
+                      'py-1.5 px-3 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 border transition-all',
+                      editEntity === 'PJ'
+                        ? 'bg-blue-950 text-blue-300 border-blue-500/60 shadow-sm ring-1 ring-blue-500/30'
+                        : 'bg-slate-900 text-slate-400 border-slate-800 hover:bg-slate-800'
+                    )}
+                  >
+                    <Building2 className="h-3.5 w-3.5 text-blue-400" />
+                    <span>PJ (Empresarial)</span>
+                  </button>
+                </div>
+
+                {editEntity === 'PJ' && (
+                  <div className="pt-1 space-y-1">
+                    <label className="text-[10px] font-semibold text-slate-400 block">Qual Empresa PJ?</label>
+                    <select
+                      value={editPjCompanyId}
+                      onChange={(e) => setEditPjCompanyId(e.target.value)}
+                      className="w-full px-3 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 text-xs font-medium focus:border-blue-500"
+                    >
+                      {pjEntities.length > 0 ? (
+                        pjEntities.map((comp) => (
+                          <option key={comp.id} value={comp.id}>
+                            🏢 {comp.name}
+                          </option>
+                        ))
+                      ) : (
+                        <option value="22222222-2222-2222-2222-222222222222">🏢 Empresa PJ Principal</option>
+                      )}
+                    </select>
+                  </div>
+                )}
+              </div>
+
               <div className="space-y-1">
                 <label className="font-semibold text-slate-300 block">Descrição</label>
                 <input
