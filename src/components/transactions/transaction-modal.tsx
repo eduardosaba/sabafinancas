@@ -14,6 +14,7 @@ import {
   User,
   Building2,
   Plus,
+  CreditCard,
 } from 'lucide-react';
 import { Account, Category, TransactionType } from '@/types/finance';
 import { createTransaction, createTransfer } from '@/lib/services/finance-service';
@@ -53,6 +54,7 @@ export function TransactionModal({
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [status, setStatus] = useState<'PAID' | 'PENDING'>('PAID');
+  const [installmentsCount, setInstallmentsCount] = useState('1');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   React.useEffect(() => {
@@ -116,6 +118,7 @@ export function TransactionModal({
           transactionDate: date,
           description,
           status,
+          installmentsCount: parseInt(installmentsCount, 10) || 1,
         });
       }
 
@@ -303,7 +306,14 @@ export function TransactionModal({
               </label>
               <select
                 value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
+                onChange={(e) => {
+                  const newAccId = e.target.value;
+                  setAccountId(newAccId);
+                  const selected = accounts.find((a) => a.id === newAccId);
+                  if (selected?.accountType === 'CREDIT_CARD' && activeTab === 'EXPENSE') {
+                    setStatus('PENDING');
+                  }
+                }}
                 className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500"
               >
                 {accounts.map((acc) => {
@@ -316,6 +326,15 @@ export function TransactionModal({
                 })}
               </select>
             </div>
+
+            {accounts.find((a) => a.id === accountId)?.accountType === 'CREDIT_CARD' && activeTab === 'EXPENSE' && (
+              <div className="p-2.5 rounded-xl bg-blue-950/80 border border-blue-800/60 text-blue-300 text-[11px] font-medium flex items-center gap-2 sm:col-span-2">
+                <CreditCard className="h-4 w-4 text-blue-400 flex-shrink-0" />
+                <span>
+                  <strong>Cartão de Crédito ({accounts.find((a) => a.id === accountId)?.name}):</strong> Fechamento dia {accounts.find((a) => a.id === accountId)?.closingDay || 25}, vencimento dia {accounts.find((a) => a.id === accountId)?.dueDay || 5}. A data final da fatura é calculada automaticamente.
+                </span>
+              </div>
+            )}
 
             {/* Destination Account (If Transfer) OR Category */}
             {activeTab === 'TRANSFER' ? (
@@ -369,16 +388,33 @@ export function TransactionModal({
 
             {/* Status (Paid / Pending) */}
             {activeTab !== 'TRANSFER' && (
-              <div className="space-y-1">
-                <label className="font-semibold text-slate-300 block">Status da Transação</label>
-                <select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as 'PAID' | 'PENDING')}
-                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500"
-                >
-                  <option value="PAID">Pago / Concluído</option>
-                  <option value="PENDING">Pendente / A Vencer</option>
-                </select>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="space-y-1">
+                  <label className="font-semibold text-slate-300 block">Status da Transação</label>
+                  <select
+                    value={status}
+                    onChange={(e) => setStatus(e.target.value as 'PAID' | 'PENDING')}
+                    className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500"
+                  >
+                    <option value="PAID">Pago / Concluído</option>
+                    <option value="PENDING">Pendente / A Vencer</option>
+                  </select>
+                </div>
+
+                {activeTab === 'EXPENSE' && (
+                  <div className="space-y-1">
+                    <label className="font-semibold text-slate-300 block">Nº de Parcelas</label>
+                    <input
+                      type="number"
+                      min="1"
+                      max="48"
+                      value={installmentsCount}
+                      onChange={(e) => setInstallmentsCount(e.target.value)}
+                      placeholder="1 (À vista)"
+                      className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 font-bold"
+                    />
+                  </div>
+                )}
               </div>
             )}
 

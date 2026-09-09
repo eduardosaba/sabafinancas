@@ -150,7 +150,16 @@ export default function TransactionsPage() {
         const matchAcc = acc?.name.toLowerCase().includes(q);
         const matchCat = cat?.name.toLowerCase().includes(q);
 
-        if (!matchDesc && !matchAcc && !matchCat) {
+        const amountNumStr = tx.amount.toString();
+        const amountBrlStr = tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+        const cleanQ = q.replace('r$', '').replace(/\s+/g, '').trim();
+
+        const matchAmount =
+          amountNumStr.includes(cleanQ) ||
+          amountBrlStr.toLowerCase().includes(cleanQ) ||
+          amountBrlStr.replace('.', '').replace(',', '.').includes(cleanQ);
+
+        if (!matchDesc && !matchAcc && !matchCat && !matchAmount) {
           return false;
         }
       }
@@ -293,13 +302,13 @@ export default function TransactionsPage() {
       <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
         
         {/* Type & Status Selector Tabs */}
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 max-w-full overflow-x-auto pb-1">
           {/* Type Tabs */}
-          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 flex-shrink-0">
             <button
               onClick={() => setSelectedType('ALL')}
               className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
                 selectedType === 'ALL'
                   ? 'bg-slate-800 text-slate-100 shadow-sm border border-slate-700'
                   : 'text-slate-400 hover:text-slate-200'
@@ -311,7 +320,7 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedType('EXPENSE')}
               className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
                 selectedType === 'EXPENSE'
                   ? 'bg-rose-950 text-rose-300 border border-rose-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-rose-400'
@@ -324,7 +333,7 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedType('INCOME')}
               className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
                 selectedType === 'INCOME'
                   ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-emerald-400'
@@ -337,7 +346,7 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedType('TRANSFER')}
               className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
                 selectedType === 'TRANSFER'
                   ? 'bg-purple-950 text-purple-300 border border-purple-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-purple-400'
@@ -349,11 +358,11 @@ export default function TransactionsPage() {
           </div>
 
           {/* Status Tabs */}
-          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800">
+          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 flex-shrink-0">
             <button
               onClick={() => setSelectedStatus('ALL')}
               className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
                 selectedStatus === 'ALL'
                   ? 'bg-slate-800 text-slate-100 shadow-sm border border-slate-700'
                   : 'text-slate-400 hover:text-slate-200'
@@ -364,7 +373,7 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedStatus('PAID')}
               className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
                 selectedStatus === 'PAID'
                   ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-emerald-400'
@@ -376,7 +385,7 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedStatus('PENDING')}
               className={cn(
-                'px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
                 selectedStatus === 'PENDING'
                   ? 'bg-amber-950 text-amber-300 border border-amber-500/40 shadow-sm'
                   : 'text-slate-400 hover:text-amber-400'
@@ -395,7 +404,7 @@ export default function TransactionsPage() {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por descrição, conta ou categoria..."
+            placeholder="Buscar por descrição, valor (R$), conta ou categoria..."
             className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 font-medium"
           />
         </div>

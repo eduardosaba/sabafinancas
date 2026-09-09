@@ -55,6 +55,7 @@ export function QuickTransactionInput({
   const [categoryId, setCategoryId] = useState<string>('');
   const [date, setDate] = useState<string>('');
   const [status, setStatus] = useState<'PAID' | 'PENDING'>('PAID');
+  const [installmentsCount, setInstallmentsCount] = useState<number>(1);
 
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -88,6 +89,7 @@ export function QuickTransactionInput({
     setType(result.type);
     setAmount(result.amount);
     setDescription(result.description);
+    setInstallmentsCount(result.installmentsCount || 1);
     
     const pickedAccId = result.accountId || displayAccounts[0]?.id || '';
     setAccountId(pickedAccId);
@@ -141,7 +143,7 @@ export function QuickTransactionInput({
         ? (selectedPjCompanyId || activeCompany?.id || pjEntities[0]?.id || '22222222-2222-2222-2222-222222222222')
         : '11111111-1111-1111-1111-111111111111';
 
-    const newTx: Omit<Transaction, 'id' | 'createdAt'> = {
+    const newTx: any = {
       userId: 'user-default-1',
       entityId: targetEntityId,
       accountId: accountId || displayAccounts[0]?.id || '',
@@ -152,6 +154,7 @@ export function QuickTransactionInput({
       transactionDate: date,
       description,
       status,
+      installmentsCount,
     };
 
     try {

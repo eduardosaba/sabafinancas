@@ -166,14 +166,15 @@ export function Header() {
                 type="button"
                 onClick={() => setEntity('PF')}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
+                  'flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
                   (entity === 'PF' || entity === '11111111-1111-1111-1111-111111111111')
                     ? 'bg-emerald-600 text-white shadow-md shadow-emerald-950 ring-1 ring-emerald-400/50'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                 )}
               >
                 <User className="h-3.5 w-3.5" />
-                <span>Pessoal (PF)</span>
+                <span className="hidden sm:inline">Pessoal </span>
+                <span>PF</span>
               </button>
 
               {/* PJ Companies Dropdown Trigger */}
@@ -182,23 +183,23 @@ export function Header() {
                   type="button"
                   onClick={() => setIsCompanyDropdownOpen(!isCompanyDropdownOpen)}
                   className={cn(
-                    'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
+                    'flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
                     isPjActive
                       ? 'bg-blue-600 text-white shadow-md shadow-blue-950 ring-1 ring-blue-400/50'
                       : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                   )}
                 >
                   <Building2 className="h-3.5 w-3.5" />
-                  <span>
-                    {activeCompany ? activeCompany.name : 'Empresa (PJ)'}
+                  <span className="truncate max-w-[70px] sm:max-w-[140px]">
+                    {activeCompany ? activeCompany.name : 'PJ'}
                   </span>
-                  <ChevronDown className="h-3 w-3 ml-0.5" />
+                  <ChevronDown className="h-3 w-3 ml-0.5 flex-shrink-0" />
                 </button>
 
                 <button
                   type="button"
                   onClick={() => setIsCompanyModalOpen(true)}
-                  className="ml-1 p-1 rounded-md text-emerald-400 hover:bg-emerald-950/60 hover:text-emerald-300 transition-colors"
+                  className="hidden sm:flex ml-1 p-1 rounded-md text-emerald-400 hover:bg-emerald-950/60 hover:text-emerald-300 transition-colors"
                   title="Cadastrar Nova Empresa (PJ)"
                 >
                   <Plus className="h-3.5 w-3.5" />
@@ -265,20 +266,21 @@ export function Header() {
                 type="button"
                 onClick={() => setEntity('CONSOLIDATED')}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
+                  'flex items-center gap-1 px-2 sm:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
                   entity === 'CONSOLIDATED'
                     ? 'bg-purple-600 text-white shadow-md shadow-purple-950 ring-1 ring-purple-400/50'
                     : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
                 )}
               >
                 <BarChart3 className="h-3.5 w-3.5" />
-                <span>Consolidado</span>
+                <span className="hidden sm:inline">Consolidado</span>
+                <span className="sm:hidden">Consol.</span>
               </button>
             </div>
           </div>
 
           {/* Right Section: + Novo Lançamento, Date Filter & Profile */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3">
             
             {/* + Novo Lançamento Button */}
             <button
@@ -310,7 +312,7 @@ export function Header() {
             </div>
 
             {/* Profile & SignOut */}
-            <div className="flex items-center gap-2 pl-2 border-l border-slate-800">
+            <div className="flex items-center gap-1.5 sm:gap-2 pl-2 border-l border-slate-800">
               {userEmail?.includes('melsaba') ? (
                 <div className="relative h-8 w-8 rounded-full overflow-hidden border border-blue-500/50 flex-shrink-0 bg-slate-800 shadow-sm transition-transform duration-300 transform hover:scale-[2] hover:z-50 cursor-pointer origin-center" title={userName || 'Mel Saba'}>
                   <img src="/avatars/avatar_mel.png" alt="Mel Saba" className="w-full h-full object-cover object-top" />
@@ -443,28 +445,90 @@ export function Sidebar() {
 export function MobileBottomNav() {
   const pathname = usePathname();
   const { config } = useEntity();
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalAccounts, setModalAccounts] = useState<Account[]>([]);
+  const [modalCategories, setModalCategories] = useState<Category[]>([]);
+
+  const handleOpenModal = async () => {
+    const [accs, cats] = await Promise.all([
+      fetchAccounts('CONSOLIDATED'),
+      fetchCategories('CONSOLIDATED'),
+    ]);
+    setModalAccounts(accs);
+    setModalCategories(cats);
+    setIsModalOpen(true);
+  };
 
   return (
-    <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800 backdrop-blur-md px-2 py-1.5 flex items-center justify-around">
-      {NAVIGATION_ITEMS.map((item) => {
-        const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.name}
-            href={item.href}
-            className={cn(
-              'flex flex-col items-center gap-1 py-1 px-3 rounded-lg text-[10px] font-medium transition-all',
-              isActive
-                ? cn('text-slate-100 font-semibold', config.textColor)
-                : 'text-slate-400 hover:text-slate-200'
-            )}
-          >
-            <Icon className="h-4 w-4" />
-            <span>{item.name}</span>
-          </Link>
-        );
-      })}
-    </nav>
+    <>
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800 backdrop-blur-md px-1 py-1.5 flex items-center justify-around shadow-2xl">
+        <Link
+          href="/"
+          className={cn(
+            'flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium transition-all',
+            pathname === '/' ? cn('text-slate-100 font-semibold', config.textColor) : 'text-slate-400 hover:text-slate-200'
+          )}
+        >
+          <BarChart3 className="h-4 w-4" />
+          <span>Painel</span>
+        </Link>
+
+        <Link
+          href="/transactions"
+          className={cn(
+            'flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium transition-all',
+            pathname?.startsWith('/transactions') ? cn('text-slate-100 font-semibold', config.textColor) : 'text-slate-400 hover:text-slate-200'
+          )}
+        >
+          <Receipt className="h-4 w-4" />
+          <span>Extrato</span>
+        </Link>
+
+        {/* Central Floating Quick Transaction Launch Button */}
+        <button
+          type="button"
+          onClick={handleOpenModal}
+          className="flex flex-col items-center justify-center -mt-5 p-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-950/90 border-2 border-slate-950 transition-all active:scale-95"
+          title="Novo Lançamento Rápido"
+        >
+          <Plus className="h-5 w-5" />
+        </button>
+
+        <Link
+          href="/debts"
+          className={cn(
+            'flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium transition-all',
+            pathname?.startsWith('/debts') ? cn('text-slate-100 font-semibold', config.textColor) : 'text-slate-400 hover:text-slate-200'
+          )}
+        >
+          <CreditCard className="h-4 w-4" />
+          <span>Dívidas</span>
+        </Link>
+
+        <Link
+          href="/settings/accounts"
+          className={cn(
+            'flex flex-col items-center gap-0.5 py-1 px-2 rounded-lg text-[10px] font-medium transition-all',
+            pathname?.startsWith('/settings') ? cn('text-slate-100 font-semibold', config.textColor) : 'text-slate-400 hover:text-slate-200'
+          )}
+        >
+          <Settings className="h-4 w-4" />
+          <span>Contas</span>
+        </Link>
+      </nav>
+
+      {/* Transaction Modal for Mobile Quick Launch */}
+      <TransactionModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        accounts={modalAccounts}
+        categories={modalCategories}
+        onSuccess={() => {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('transactionUpdated'));
+          }
+        }}
+      />
+    </>
   );
 }

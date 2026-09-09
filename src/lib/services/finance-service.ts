@@ -14,6 +14,7 @@ import {
   TransactionType,
 } from '@/types/finance';
 import { SEED_CATEGORIES } from '@/lib/supabase/seed';
+import { addMonthsToISO, calculateCreditCardDueDate } from '@/lib/utils/credit-card';
 
 export interface CreateTransactionInput {
   userId?: string;
@@ -27,6 +28,7 @@ export interface CreateTransactionInput {
   transactionDate: string; // YYYY-MM-DD
   description: string;
   status?: 'PENDING' | 'PAID';
+  installmentsCount?: number;
 }
 
 export interface CreateDebtInput {
@@ -54,6 +56,9 @@ export interface CreateAccountInput {
   accountType: AccountType;
   initialBalance: number;
   colorHex?: string;
+  closingDay?: number | null;
+  dueDay?: number | null;
+  creditLimit?: number | null;
 }
 
 export interface CreateCategoryInput {
@@ -144,12 +149,48 @@ export interface CreateEntityInput {
   userId?: string;
 }
 
+async function execWithJwtRetry<T = any>(
+  fn: (supabase: ReturnType<typeof createClient>) => Promise<{ data: T | null; error: any }>
+): Promise<{ data: T | null; error: any }> {
+  let supabase = createClient();
+  let result: { data: T | null; error: any };
+  try {
+    result = await fn(supabase);
+  } catch (err: any) {
+    result = { data: null, error: err };
+  }
+
+  if (
+    result.error &&
+    (result.error.message?.includes('JWT issued at future') ||
+      result.error.message?.includes('JWT expired') ||
+      result.error.message?.includes('invalid JWT') ||
+      result.error.code === 'PGRST301' ||
+      result.error.status === 401)
+  ) {
+    console.warn('Supabase JWT token issue / clock skew detected. Clearing invalid session and retrying query...');
+    try {
+      await supabase.auth.signOut();
+    } catch {}
+    supabase = createClient();
+    try {
+      result = await fn(supabase);
+    } catch (err: any) {
+      result = { data: null, error: err };
+    }
+  }
+
+  return result;
+}
+
 // -------------------------------------------------------------
 // ENTITIES
 // -------------------------------------------------------------
 export async function fetchEntities(): Promise<Entity[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.from('entities').select('*').order('created_at', { ascending: true });
+  const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
+    const res = await supabase.from('entities').select('*').order('created_at', { ascending: true });
+    return res;
+  });
   if (error) {
     console.error('Erro detalhado Supabase (fetchEntities):', error);
     throw new Error(`Falha ao buscar entidades do Supabase: ${error.message}`);
@@ -198,8 +239,10 @@ export async function createEntity(input: CreateEntityInput): Promise<Entity> {
 // ACCOUNTS
 // -------------------------------------------------------------
 export async function fetchAccounts(entityType?: string): Promise<Account[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.from('accounts').select('*');
+  const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
+    const res = await supabase.from('accounts').select('*');
+    return res;
+  });
   if (error) {
     console.error('Erro detalhado Supabase (fetchAccounts):', error);
     throw new Error(`Falha ao carregar contas do Supabase: ${error.message}`);
@@ -218,6 +261,9 @@ export async function fetchAccounts(entityType?: string): Promise<Account[]> {
     currentBalance: Number(item.current_balance),
     colorHex: item.color_hex,
     isActive: item.is_active,
+    closingDay: item.closing_day ? Number(item.closing_day) : null,
+    dueDay: item.due_day ? Number(item.due_day) : null,
+    creditLimit: item.credit_limit ? Number(item.credit_limit) : null,
     createdAt: item.created_at,
   }));
 
@@ -253,17 +299,23 @@ export async function createAccount(input: CreateAccountInput): Promise<Account>
     dbEntityId = input.entityId === 'PJ' ? '22222222-2222-2222-2222-222222222222' : '11111111-1111-1111-1111-111111111111';
   }
 
+  const payload: any = {
+    entity_id: dbEntityId,
+    name: input.name,
+    account_type: input.accountType,
+    initial_balance: input.initialBalance,
+    current_balance: input.initialBalance,
+    color_hex: input.colorHex || '#3b82f6',
+    is_active: true,
+  };
+
+  if (input.closingDay !== undefined) payload.closing_day = input.closingDay;
+  if (input.dueDay !== undefined) payload.due_day = input.dueDay;
+  if (input.creditLimit !== undefined) payload.credit_limit = input.creditLimit;
+
   const { data, error } = await supabase
     .from('accounts')
-    .insert({
-      entity_id: dbEntityId,
-      name: input.name,
-      account_type: input.accountType,
-      initial_balance: input.initialBalance,
-      current_balance: input.initialBalance,
-      color_hex: input.colorHex || '#3b82f6',
-      is_active: true,
-    })
+    .insert(payload)
     .select()
     .single();
 
@@ -281,6 +333,9 @@ export async function createAccount(input: CreateAccountInput): Promise<Account>
     currentBalance: Number(data.current_balance),
     colorHex: data.color_hex,
     isActive: data.is_active,
+    closingDay: data.closing_day ? Number(data.closing_day) : null,
+    dueDay: data.due_day ? Number(data.due_day) : null,
+    creditLimit: data.credit_limit ? Number(data.credit_limit) : null,
     createdAt: data.created_at,
   };
 }
@@ -296,6 +351,9 @@ export async function updateAccount(
   if (updates.initialBalance !== undefined) payload.initial_balance = updates.initialBalance;
   if (updates.currentBalance !== undefined) payload.current_balance = updates.currentBalance;
   if (updates.colorHex) payload.color_hex = updates.colorHex;
+  if (updates.closingDay !== undefined) payload.closing_day = updates.closingDay;
+  if (updates.dueDay !== undefined) payload.due_day = updates.dueDay;
+  if (updates.creditLimit !== undefined) payload.credit_limit = updates.creditLimit;
 
   const { error } = await supabase.from('accounts').update(payload).eq('id', id);
   if (error) {
@@ -319,8 +377,10 @@ export async function deleteAccount(id: string): Promise<boolean> {
 // CATEGORIES
 // -------------------------------------------------------------
 export async function fetchCategories(entityType?: string): Promise<Category[]> {
-  const supabase = createClient();
-  const { data, error } = await supabase.from('categories').select('*');
+  const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
+    const res = await supabase.from('categories').select('*');
+    return res;
+  });
   if (error) {
     console.error('Erro detalhado Supabase (fetchCategories):', error);
     throw new Error(`Falha ao carregar categorias do Supabase: ${error.message}`);
@@ -452,13 +512,16 @@ export async function fetchTransactions(filters: {
   startDate?: string;
   endDate?: string;
 }): Promise<Transaction[]> {
-  const supabase = createClient();
-  let query = supabase.from('transactions').select('*').order('transaction_date', { ascending: false });
+  const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
+    let query = supabase.from('transactions').select('*').order('transaction_date', { ascending: false });
 
-  if (filters.startDate) query = query.gte('transaction_date', filters.startDate);
-  if (filters.endDate) query = query.lte('transaction_date', filters.endDate);
+    if (filters.startDate) query = query.gte('transaction_date', filters.startDate);
+    if (filters.endDate) query = query.lte('transaction_date', filters.endDate);
 
-  const { data, error } = await query;
+    const res = await query;
+    return res;
+  });
+
   if (error) {
     console.error('Erro detalhado Supabase (fetchTransactions):', error);
     throw new Error(`Falha ao carregar transações do Supabase: ${error.message}`);
@@ -488,7 +551,6 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   const supabase = createClient();
   const userId = input.userId || (await getAuthUserId(supabase));
   await ensureUserExistsInDb(supabase, userId);
-  const status = input.status || 'PAID';
 
   let dbEntityId = input.entityId;
   if (!isValidUUID(dbEntityId)) {
@@ -502,6 +564,105 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   const dbCategoryId = isValidUUID(input.categoryId) ? input.categoryId : null;
   const dbDebtInstId = isValidUUID(input.debtInstallmentId) ? input.debtInstallmentId : null;
 
+  // Check if account is CREDIT_CARD
+  let targetAccount: Account | null = null;
+  if (dbAccountId && isValidUUID(dbAccountId)) {
+    const { data: accData } = await supabase.from('accounts').select('*').eq('id', dbAccountId).single();
+    if (accData) {
+      targetAccount = {
+        id: accData.id,
+        entityId: accData.entity_id,
+        name: accData.name,
+        accountType: accData.account_type,
+        initialBalance: Number(accData.initial_balance),
+        currentBalance: Number(accData.current_balance),
+        colorHex: accData.color_hex,
+        isActive: accData.is_active,
+        closingDay: accData.closing_day ? Number(accData.closing_day) : 25,
+        dueDay: accData.due_day ? Number(accData.due_day) : 5,
+        creditLimit: accData.credit_limit ? Number(accData.credit_limit) : 0,
+      };
+    }
+  }
+
+  const isCreditCard = targetAccount?.accountType === 'CREDIT_CARD';
+  let txStatus = input.status;
+  if (isCreditCard && input.type === 'EXPENSE' && !input.status) {
+    txStatus = 'PENDING';
+  } else if (!txStatus) {
+    txStatus = 'PAID';
+  }
+
+  // Handle Installments (Compras Parceladas no Cartão)
+  const installmentsCount = input.installmentsCount || 1;
+  if (isCreditCard && input.type === 'EXPENSE' && installmentsCount > 1) {
+    const closingDay = targetAccount?.closingDay || 25;
+    const dueDay = targetAccount?.dueDay || 5;
+
+    const firstDueDate = calculateCreditCardDueDate(input.transactionDate, closingDay, dueDay);
+    const installmentAmount = Math.round((input.amount / installmentsCount) * 100) / 100;
+    const lastInstallmentAmount = input.amount - (installmentAmount * (installmentsCount - 1));
+
+    const insertedTxs: Transaction[] = [];
+
+    for (let i = 1; i <= installmentsCount; i++) {
+      const instDueDate = i === 1 ? firstDueDate : addMonthsToISO(firstDueDate, i - 1);
+      const instAmount = i === installmentsCount ? lastInstallmentAmount : installmentAmount;
+      const instDescription = `${input.description} (${i}/${installmentsCount})`;
+
+      const payload: any = {
+        user_id: userId,
+        entity_id: dbEntityId,
+        account_id: dbAccountId,
+        destination_account_id: dbDestAccountId,
+        category_id: dbCategoryId,
+        debt_installment_id: dbDebtInstId,
+        type: input.type,
+        amount: instAmount,
+        transaction_date: instDueDate,
+        description: instDescription,
+        status: 'PENDING',
+      };
+
+      const { data, error } = await supabase
+        .from('transactions')
+        .insert(payload)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Erro detalhado Supabase (parcelas):', error);
+        throw new Error(`Falha ao gravar parcela no Supabase: ${error.message}`);
+      }
+
+      insertedTxs.push({
+        id: data.id,
+        userId: data.user_id,
+        entityId: data.entity_id,
+        accountId: data.account_id,
+        destinationAccountId: data.destination_account_id,
+        categoryId: data.category_id,
+        debtInstallmentId: data.debt_installment_id,
+        type: data.type,
+        amount: Number(data.amount),
+        transactionDate: data.transaction_date,
+        description: data.description,
+        status: data.status,
+        createdAt: data.created_at,
+      });
+    }
+
+    return insertedTxs[0];
+  }
+
+  // Single transaction creation
+  let txDate = input.transactionDate;
+  if (isCreditCard && input.type === 'EXPENSE') {
+    const closingDay = targetAccount?.closingDay || 25;
+    const dueDay = targetAccount?.dueDay || 5;
+    txDate = calculateCreditCardDueDate(input.transactionDate, closingDay, dueDay);
+  }
+
   const payload: any = {
     user_id: userId,
     entity_id: dbEntityId,
@@ -511,9 +672,9 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     debt_installment_id: dbDebtInstId,
     type: input.type,
     amount: input.amount,
-    transaction_date: input.transactionDate,
+    transaction_date: txDate,
     description: input.description,
-    status,
+    status: txStatus,
   };
 
   const { data, error } = await supabase
@@ -527,50 +688,52 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
     throw new Error(`Falha ao gravar no Supabase: ${error.message}`);
   }
 
-  // Update account balance directly in Supabase
-  if (dbAccountId && isValidUUID(dbAccountId)) {
-    const { data: accountData, error: fetchAccError } = await supabase
-      .from('accounts')
-      .select('current_balance')
-      .eq('id', dbAccountId)
-      .single();
-
-    if (fetchAccError) {
-      console.error('Erro detalhado Supabase (atualização de saldo):', fetchAccError);
-      throw new Error(`Falha ao buscar saldo da conta: ${fetchAccError.message}`);
-    }
-
-    if (accountData) {
-      const currentBalance = Number(accountData.current_balance);
-      const newBalance =
-        input.type === 'INCOME' ? currentBalance + input.amount : currentBalance - input.amount;
-
-      const { error: updateAccError } = await supabase
+  // Update account balance directly in Supabase ONLY IF status === 'PAID'
+  if (txStatus === 'PAID') {
+    if (dbAccountId && isValidUUID(dbAccountId)) {
+      const { data: accountData, error: fetchAccError } = await supabase
         .from('accounts')
-        .update({ current_balance: newBalance })
-        .eq('id', dbAccountId);
+        .select('current_balance')
+        .eq('id', dbAccountId)
+        .single();
 
-      if (updateAccError) {
-        console.error('Erro detalhado Supabase (gravação de saldo):', updateAccError);
-        throw new Error(`Falha ao atualizar saldo da conta: ${updateAccError.message}`);
+      if (fetchAccError) {
+        console.error('Erro detalhado Supabase (atualização de saldo):', fetchAccError);
+        throw new Error(`Falha ao buscar saldo da conta: ${fetchAccError.message}`);
+      }
+
+      if (accountData) {
+        const currentBalance = Number(accountData.current_balance);
+        const newBalance =
+          input.type === 'INCOME' ? currentBalance + input.amount : currentBalance - input.amount;
+
+        const { error: updateAccError } = await supabase
+          .from('accounts')
+          .update({ current_balance: newBalance })
+          .eq('id', dbAccountId);
+
+        if (updateAccError) {
+          console.error('Erro detalhado Supabase (gravação de saldo):', updateAccError);
+          throw new Error(`Falha ao atualizar saldo da conta: ${updateAccError.message}`);
+        }
       }
     }
-  }
 
-  if (input.type === 'TRANSFER' && dbDestAccountId && isValidUUID(dbDestAccountId)) {
-    const { data: destAccData, error: fetchDestErr } = await supabase
-      .from('accounts')
-      .select('current_balance')
-      .eq('id', dbDestAccountId)
-      .single();
-
-    if (!fetchDestErr && destAccData) {
-      const currentBalance = Number(destAccData.current_balance);
-      const newBalance = currentBalance + input.amount;
-      await supabase
+    if (input.type === 'TRANSFER' && dbDestAccountId && isValidUUID(dbDestAccountId)) {
+      const { data: destAccData, error: fetchDestErr } = await supabase
         .from('accounts')
-        .update({ current_balance: newBalance })
-        .eq('id', dbDestAccountId);
+        .select('current_balance')
+        .eq('id', dbDestAccountId)
+        .single();
+
+      if (!fetchDestErr && destAccData) {
+        const currentBalance = Number(destAccData.current_balance);
+        const newBalance = currentBalance + input.amount;
+        await supabase
+          .from('accounts')
+          .update({ current_balance: newBalance })
+          .eq('id', dbDestAccountId);
+      }
     }
   }
 
@@ -591,6 +754,67 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   };
 }
 
+export async function payCreditCardInvoice(
+  creditCardAccountId: string,
+  sourceAccountId: string,
+  paymentAmount: number,
+  paymentDate?: string,
+  targetDueDate?: string
+): Promise<boolean> {
+  const supabase = createClient();
+  const payDate = paymentDate || new Date().toISOString().split('T')[0];
+
+  const { data: sourceAcc } = await supabase
+    .from('accounts')
+    .select('entity_id')
+    .eq('id', sourceAccountId)
+    .single();
+
+  const entityId = sourceAcc?.entity_id || '11111111-1111-1111-1111-111111111111';
+
+  // 1. Create TRANSFER transaction (Checking -> Credit Card)
+  await createTransaction({
+    entityId,
+    accountId: sourceAccountId,
+    destinationAccountId: creditCardAccountId,
+    type: 'TRANSFER',
+    amount: paymentAmount,
+    transactionDate: payDate,
+    description: 'Pagamento de Fatura do Cartão de Crédito',
+    status: 'PAID',
+  });
+
+  // 2. Mark pending card transactions up to paymentAmount as PAID
+  let query = supabase
+    .from('transactions')
+    .select('*')
+    .eq('account_id', creditCardAccountId)
+    .eq('status', 'PENDING')
+    .order('transaction_date', { ascending: true });
+
+  if (targetDueDate) {
+    query = query.lte('transaction_date', targetDueDate);
+  }
+
+  const { data: pendingCardTxs } = await query;
+
+  if (pendingCardTxs && pendingCardTxs.length > 0) {
+    let remainingPayment = paymentAmount;
+    for (const tx of pendingCardTxs) {
+      const txAmt = Number(tx.amount);
+      if (remainingPayment >= txAmt) {
+        await supabase
+          .from('transactions')
+          .update({ status: 'PAID' })
+          .eq('id', tx.id);
+        remainingPayment -= txAmt;
+      }
+    }
+  }
+
+  return true;
+}
+
 export async function deleteTransaction(id: string): Promise<boolean> {
   const supabase = createClient();
   const { data: dbTx, error: selectErr } = await supabase.from('transactions').select('*').eq('id', id).single();
@@ -605,8 +829,8 @@ export async function deleteTransaction(id: string): Promise<boolean> {
     throw new Error(`Falha ao excluir transação no Supabase: ${deleteErr.message}`);
   }
 
-  // Revert balance in DB
-  if (dbTx.account_id && isValidUUID(dbTx.account_id)) {
+  // Revert balance in DB ONLY IF status was 'PAID'
+  if (dbTx.status === 'PAID' && dbTx.account_id && isValidUUID(dbTx.account_id)) {
     const { data: accData } = await supabase
       .from('accounts')
       .select('current_balance')
@@ -618,6 +842,20 @@ export async function deleteTransaction(id: string): Promise<boolean> {
       const revertedBal = dbTx.type === 'INCOME' ? curBal - Number(dbTx.amount) : curBal + Number(dbTx.amount);
       await supabase.from('accounts').update({ current_balance: revertedBal }).eq('id', dbTx.account_id);
     }
+
+    if (dbTx.type === 'TRANSFER' && dbTx.destination_account_id && isValidUUID(dbTx.destination_account_id)) {
+      const { data: destAccData } = await supabase
+        .from('accounts')
+        .select('current_balance')
+        .eq('id', dbTx.destination_account_id)
+        .single();
+
+      if (destAccData) {
+        const curBal = Number(destAccData.current_balance);
+        const revertedBal = curBal - Number(dbTx.amount);
+        await supabase.from('accounts').update({ current_balance: revertedBal }).eq('id', dbTx.destination_account_id);
+      }
+    }
   }
 
   return true;
@@ -628,6 +866,13 @@ export async function updateTransaction(
   updates: Partial<CreateTransactionInput>
 ): Promise<boolean> {
   const supabase = createClient();
+
+  const { data: dbTx, error: fetchErr } = await supabase.from('transactions').select('*').eq('id', id).single();
+  if (fetchErr || !dbTx) {
+    console.error('Erro detalhado Supabase (updateTransaction fetch):', fetchErr);
+    throw new Error(`Transação não encontrada no Supabase.`);
+  }
+
   const dbPayload: any = {};
   if (updates.description !== undefined) dbPayload.description = updates.description;
   if (updates.amount !== undefined) dbPayload.amount = updates.amount;
@@ -651,6 +896,45 @@ export async function updateTransaction(
     console.error('Erro detalhado Supabase (updateTransaction):', error);
     throw new Error(`Falha ao atualizar transação no Supabase: ${error.message}`);
   }
+
+  // Handle balance updates based on status transitions
+  const oldStatus = dbTx.status;
+  const newStatus = updates.status !== undefined ? updates.status : oldStatus;
+  const oldAmount = Number(dbTx.amount);
+  const newAmount = updates.amount !== undefined ? updates.amount : oldAmount;
+  const oldType = dbTx.type;
+  const newType = updates.type !== undefined ? updates.type : oldType;
+  const oldAccountId = dbTx.account_id;
+  const newAccountId = updates.accountId !== undefined ? updates.accountId : oldAccountId;
+
+  const adjustBalance = async (accId: string | null, delta: number) => {
+    if (!accId || !isValidUUID(accId)) return;
+    const { data: accData } = await supabase.from('accounts').select('current_balance').eq('id', accId).single();
+    if (accData) {
+      const cur = Number(accData.current_balance);
+      await supabase.from('accounts').update({ current_balance: cur + delta }).eq('id', accId);
+    }
+  };
+
+  if (oldStatus === 'PENDING' && newStatus === 'PAID') {
+    const delta = newType === 'INCOME' ? newAmount : -newAmount;
+    await adjustBalance(newAccountId, delta);
+  } else if (oldStatus === 'PAID' && newStatus === 'PENDING') {
+    const revertDelta = oldType === 'INCOME' ? -oldAmount : oldAmount;
+    await adjustBalance(oldAccountId, revertDelta);
+  } else if (oldStatus === 'PAID' && newStatus === 'PAID') {
+    if (oldAccountId === newAccountId && oldType === newType) {
+      const diff = newAmount - oldAmount;
+      const delta = newType === 'INCOME' ? diff : -diff;
+      if (delta !== 0) await adjustBalance(newAccountId, delta);
+    } else {
+      const oldRevertDelta = oldType === 'INCOME' ? -oldAmount : oldAmount;
+      await adjustBalance(oldAccountId, oldRevertDelta);
+      const newDelta = newType === 'INCOME' ? newAmount : -newAmount;
+      await adjustBalance(newAccountId, newDelta);
+    }
+  }
+
   return true;
 }
 
@@ -738,21 +1022,23 @@ export async function fetchCategoryBreakdown(
 // BUDGETS
 // -------------------------------------------------------------
 export async function fetchBudgets(entityType: string, monthYear: string): Promise<Budget[]> {
-  const supabase = createClient();
   const categories = await fetchCategories(entityType).catch(() => []);
   const expenseCategories = categories.filter((c) => c.nature === 'EXPENSE' || !c.nature);
   const txs = await fetchTransactions({ entityType }).catch(() => []);
 
   const dbBudgetsMap = new Map<string, number>();
 
-  let query = supabase.from('budgets').select('*');
-  if (monthYear.length === 4) {
-    query = query.gte('month_year', `${monthYear}-01`).lte('month_year', `${monthYear}-12`);
-  } else {
-    query = query.eq('month_year', monthYear);
-  }
+  const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
+    let query = supabase.from('budgets').select('*');
+    if (monthYear.length === 4) {
+      query = query.gte('month_year', `${monthYear}-01`).lte('month_year', `${monthYear}-12`);
+    } else {
+      query = query.eq('month_year', monthYear);
+    }
+    const res = await query;
+    return res;
+  });
 
-  const { data, error } = await query;
   if (!error && data) {
     data.forEach((b: any) => {
       const current = dbBudgetsMap.get(b.category_id) || 0;
@@ -822,10 +1108,10 @@ export async function upsertBudget(
 // DEBTS & INSTALLMENTS
 // -------------------------------------------------------------
 export async function fetchDebts(entityType: string): Promise<Debt[]> {
-  const supabase = createClient();
-  const { data: debtsData, error: debtsErr } = await supabase
-    .from('debts')
-    .select('*, debt_installments(*)');
+  const { data: debtsData, error: debtsErr } = await execWithJwtRetry<any[]>(async (supabase) => {
+    const res = await supabase.from('debts').select('*, debt_installments(*)');
+    return res;
+  });
 
   if (debtsErr) {
     console.error('Erro detalhado Supabase (fetchDebts):', debtsErr);

@@ -49,7 +49,7 @@ export function SplashScreen() {
         {/* Application Name & Tagline */}
         <div className="text-center">
           <h1 className="text-2xl font-bold tracking-tight bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
-            Saba Finanças PF / PJ
+            Mel & Saba Finanças PF / PJ
           </h1>
           <p className="mt-1 text-xs text-slate-400 flex items-center justify-center gap-1.5">
             <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />

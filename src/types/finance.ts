@@ -36,6 +36,9 @@ export interface Account {
   currentBalance: number;
   colorHex: string;
   isActive: boolean;
+  closingDay?: number | null;
+  dueDay?: number | null;
+  creditLimit?: number | null;
   createdAt?: string;
 }
 
@@ -113,6 +116,7 @@ export interface ParsedTransaction {
   categoryName?: string;
   date: string; // YYYY-MM-DD
   status?: TransactionStatus;
+  installmentsCount?: number;
   confidence: number;
 }
 
@@ -130,3 +134,14 @@ export interface CategoryBreakdownItem {
   percentage: number;
   colorHex: string;
 }
+
+export interface CreditCardMetrics {
+  currentStatementDueDate: string;
+  openStatementTotal: number;
+  futureStatementsTotal: number;
+  totalUsedCredit: number;
+  creditLimit: number;
+  availableLimit: number;
+  limitUsagePercentage: number;
+}
+

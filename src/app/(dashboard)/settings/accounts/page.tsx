@@ -46,6 +46,9 @@ export default function AccountsSettingsPage() {
   const [accountType, setAccountType] = useState<AccountType>('CHECKING');
   const [initialBalance, setInitialBalance] = useState('0.00');
   const [colorHex, setColorHex] = useState('#3b82f6');
+  const [closingDay, setClosingDay] = useState('25');
+  const [dueDay, setDueDay] = useState('5');
+  const [creditLimit, setCreditLimit] = useState('10000.00');
   const [targetEntity, setTargetEntity] = useState<string>(
     entity !== 'PF' && entity !== '11111111-1111-1111-1111-111111111111' && entity !== 'CONSOLIDATED'
       ? entity
@@ -59,6 +62,9 @@ export default function AccountsSettingsPage() {
   const [editType, setEditType] = useState<AccountType>('CHECKING');
   const [editColor, setEditColor] = useState('#3b82f6');
   const [editBalance, setEditBalance] = useState('0.00');
+  const [editClosingDay, setEditClosingDay] = useState('25');
+  const [editDueDay, setEditDueDay] = useState('5');
+  const [editCreditLimit, setEditCreditLimit] = useState('10000.00');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
   const loadData = useCallback(async () => {
@@ -106,6 +112,9 @@ export default function AccountsSettingsPage() {
         accountType,
         initialBalance: parseFloat(initialBalance) || 0,
         colorHex,
+        closingDay: accountType === 'CREDIT_CARD' ? parseInt(closingDay, 10) || 25 : null,
+        dueDay: accountType === 'CREDIT_CARD' ? parseInt(dueDay, 10) || 5 : null,
+        creditLimit: accountType === 'CREDIT_CARD' ? parseFloat(creditLimit) || 0 : null,
       });
 
       setShowModal(false);
@@ -143,6 +152,9 @@ export default function AccountsSettingsPage() {
     setEditType(acc.accountType);
     setEditColor(acc.colorHex || '#3b82f6');
     setEditBalance(acc.currentBalance.toString());
+    setEditClosingDay(acc.closingDay ? acc.closingDay.toString() : '25');
+    setEditDueDay(acc.dueDay ? acc.dueDay.toString() : '5');
+    setEditCreditLimit(acc.creditLimit ? acc.creditLimit.toString() : '10000.00');
   };
 
   const handleSaveEdit = async (e: React.FormEvent) => {
@@ -158,6 +170,9 @@ export default function AccountsSettingsPage() {
         colorHex: editColor,
         currentBalance: parsedBalance,
         initialBalance: parsedBalance,
+        closingDay: editType === 'CREDIT_CARD' ? parseInt(editClosingDay, 10) || 25 : null,
+        dueDay: editType === 'CREDIT_CARD' ? parseInt(editDueDay, 10) || 5 : null,
+        creditLimit: editType === 'CREDIT_CARD' ? parseFloat(editCreditLimit) || 0 : null,
       });
       toast.success(`Conta "${editName}" atualizada com sucesso!`, 'Conta Atualizada');
       setEditingAccount(null);
@@ -308,8 +323,25 @@ export default function AccountsSettingsPage() {
                 </div>
               </div>
 
+              {acc.accountType === 'CREDIT_CARD' && (
+                <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-400 space-y-1">
+                  <div className="flex justify-between">
+                    <span>Fechamento: Dia {acc.closingDay || 25}</span>
+                    <span>Vencimento: Dia {acc.dueDay || 5}</span>
+                  </div>
+                  <div className="flex justify-between font-bold text-slate-200">
+                    <span>Limite Total:</span>
+                    <span className="text-emerald-400">
+                      {(acc.creditLimit || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </span>
+                  </div>
+                </div>
+              )}
+
               <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-                <span className="text-xs text-slate-400">Saldo Atual</span>
+                <span className="text-xs text-slate-400">
+                  {acc.accountType === 'CREDIT_CARD' ? 'Saldo Devedor / Fatura' : 'Saldo Atual'}
+                </span>
                 <span className="text-lg font-bold font-mono text-slate-100">
                   {acc.currentBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </span>
@@ -377,6 +409,48 @@ export default function AccountsSettingsPage() {
                   />
                 </div>
               </div>
+
+              {editType === 'CREDIT_CARD' && (
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                  <span className="text-[11px] font-bold text-blue-400 uppercase tracking-wider block">
+                    Parâmetros do Cartão de Crédito
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-300 block">Dia Fechamento</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={editClosingDay}
+                        onChange={(e) => setEditClosingDay(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-300 block">Dia Vencimento</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={editDueDay}
+                        onChange={(e) => setEditDueDay(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-300 block">Limite Total (R$)</label>
+                      <input
+                        type="number"
+                        step="100"
+                        value={editCreditLimit}
+                        onChange={(e) => setEditCreditLimit(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
@@ -479,6 +553,48 @@ export default function AccountsSettingsPage() {
                   />
                 </div>
               </div>
+
+              {accountType === 'CREDIT_CARD' && (
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-3">
+                  <span className="text-[11px] font-bold text-emerald-400 uppercase tracking-wider block">
+                    Parâmetros do Cartão de Crédito
+                  </span>
+                  <div className="grid grid-cols-3 gap-2">
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-300 block">Dia Fechamento</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={closingDay}
+                        onChange={(e) => setClosingDay(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-300 block">Dia Vencimento</label>
+                      <input
+                        type="number"
+                        min="1"
+                        max="31"
+                        value={dueDay}
+                        onChange={(e) => setDueDay(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 font-bold"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[11px] font-semibold text-slate-300 block">Limite Total (R$)</label>
+                      <input
+                        type="number"
+                        step="100"
+                        value={creditLimit}
+                        onChange={(e) => setCreditLimit(e.target.value)}
+                        className="w-full px-2 py-1.5 rounded-lg bg-slate-900 border border-slate-700 text-slate-100 font-bold"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">

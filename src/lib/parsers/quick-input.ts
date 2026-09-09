@@ -94,6 +94,18 @@ export function parseQuickInput(
     confidence += 0.1;
   }
 
+  // 1.6 INSTALLMENTS DETECTION (e.g. "em 10x", "10x", "10 parcelas")
+  let installmentsCount = 1;
+  const installmentMatch = rawInput.match(/\b(?:em\s*)?(\d{1,2})\s*x\b/i) || rawInput.match(/\b(\d{1,2})\s*parcelas?\b/i);
+  if (installmentMatch) {
+    const num = parseInt(installmentMatch[1], 10);
+    if (!isNaN(num) && num > 1 && num <= 48) {
+      installmentsCount = num;
+      confidence += 0.1;
+      normalized = normalized.replace(new RegExp(normalizeText(installmentMatch[0]), 'gi'), '');
+    }
+  }
+
   // 2. TRANSACTION TYPE DETECTION
   let type: TransactionType = 'EXPENSE';
   const hasIncomeKeyword = INCOME_KEYWORDS.some((kw) => normalized.includes(kw));
@@ -232,6 +244,7 @@ export function parseQuickInput(
     categoryName: matchedCategoryName,
     date: formatDateISO(date),
     status,
+    installmentsCount,
     confidence: Math.min(1.0, confidence),
   };
 }

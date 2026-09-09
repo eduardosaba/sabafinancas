@@ -19,13 +19,15 @@ import {
   Calendar,
 } from 'lucide-react';
 import { useEntity } from '@/contexts/entity-context';
-import { Account, Debt, DebtInstallment } from '@/types/finance';
+import { Account, Debt, DebtInstallment, Transaction } from '@/types/finance';
 import {
   createDebtWithInstallments,
   deleteDebt,
   fetchAccounts,
   fetchDebts,
+  fetchTransactions,
   payDebtInstallment,
+  updateTransaction,
 } from '@/lib/services/finance-service';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { cn } from '@/lib/utils';
@@ -36,17 +38,22 @@ export default function DebtsPage() {
   const { toast, confirm } = useToast();
 
   const [debts, setDebts] = useState<Debt[]>([]);
+  const [pendingTxs, setPendingTxs] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Accordion state for expanded debt details
   const [expandedDebtId, setExpandedDebtId] = useState<string | null>(null);
 
-  // Payment modal state
+  // Payment modal state for debt installment
   const [payingInstallment, setPayingInstallment] = useState<{
     installment: DebtInstallment;
     debt: Debt;
   } | null>(null);
+
+  // Payment modal state for pending transaction
+  const [payingTx, setPayingTx] = useState<Transaction | null>(null);
+
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSubmittingPay, setIsSubmittingPay] = useState(false);
@@ -64,14 +71,16 @@ export default function DebtsPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [debtsData, accountsData] = await Promise.all([
+      const [debtsData, accountsData, allTxs] = await Promise.all([
         fetchDebts(entity),
         fetchAccounts(entity),
+        fetchTransactions({ entityType: entity }),
       ]);
       setDebts(debtsData);
       setAccounts(accountsData);
+      setPendingTxs(allTxs.filter((t) => t.status === 'PENDING'));
       if (accountsData.length > 0) {
-        setSelectedAccountId(accountsData[0].id);
+        setSelectedAccountId((prev) => prev || accountsData[0].id);
       }
     } catch (err) {
       console.error('Error loading debts:', err);
@@ -85,6 +94,12 @@ export default function DebtsPage() {
       loadData();
     }
   }, [isHydrated, loadData]);
+
+  useEffect(() => {
+    const handleRefresh = () => loadData();
+    window.addEventListener('transactionUpdated', handleRefresh);
+    return () => window.removeEventListener('transactionUpdated', handleRefresh);
+  }, [loadData]);
 
   // Executive summary computations
   const summary = useMemo(() => {
@@ -104,6 +119,15 @@ export default function DebtsPage() {
       });
     });
 
+    pendingTxs.forEach((tx) => {
+      if (tx.type === 'EXPENSE') {
+        totalConsolidatedDebt += tx.amount;
+        if (tx.transactionDate.startsWith(currentMonth)) {
+          dueThisMonthTotal += tx.amount;
+        }
+      }
+    });
+
     // Income commitment thermometer (estimate income baseline)
     const estimatedMonthlyIncome = entity === 'PJ' ? 48900 : 12500;
     const commitmentPercentage =
@@ -114,7 +138,7 @@ export default function DebtsPage() {
       dueThisMonthTotal,
       commitmentPercentage,
     };
-  }, [debts, entity]);
+  }, [debts, pendingTxs, entity]);
 
   const handlePayInstallmentSubmit = async () => {
     if (!payingInstallment || !selectedAccountId) return;
@@ -123,10 +147,32 @@ export default function DebtsPage() {
       await payDebtInstallment(payingInstallment.installment.id, selectedAccountId, payDate);
       toast.success(`Parcela de ${payingInstallment.installment.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })} baixada com sucesso!`, 'Pagamento Realizado');
       setPayingInstallment(null);
+      window.dispatchEvent(new CustomEvent('transactionUpdated'));
       await loadData();
     } catch (err) {
       console.error('Error paying installment:', err);
       toast.error('Erro ao processar pagamento da parcela.');
+    } finally {
+      setIsSubmittingPay(false);
+    }
+  };
+
+  const handlePayTxSubmit = async () => {
+    if (!payingTx || !selectedAccountId) return;
+    setIsSubmittingPay(true);
+    try {
+      await updateTransaction(payingTx.id, {
+        status: 'PAID',
+        accountId: selectedAccountId,
+        transactionDate: payDate,
+      });
+      toast.success(`Lançamento "${payingTx.description}" baixado e debitado na conta!`, 'Pagamento Confirmado');
+      setPayingTx(null);
+      window.dispatchEvent(new CustomEvent('transactionUpdated'));
+      await loadData();
+    } catch (err: any) {
+      console.error('Error paying pending transaction:', err);
+      toast.error(`Erro ao dar baixa no lançamento: ${err?.message || 'Falha na gravação'}`);
     } finally {
       setIsSubmittingPay(false);
     }
@@ -265,6 +311,93 @@ export default function DebtsPage() {
           </div>
         </div>
 
+      </div>
+
+      {/* Faturas, Boletos Vencidos e Débitos Pendentes */}
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+            <ShieldAlert className="h-5 w-5 text-amber-400" />
+            Faturas, Boletos Vencidos e Débitos Pendentes ({pendingTxs.length})
+          </h2>
+          <span className="text-xs text-slate-400">
+            Lançamentos a vencer só são debitados da conta após a confirmação do pagamento
+          </span>
+        </div>
+
+        {isLoading ? (
+          <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+            <Clock className="h-4 w-4 animate-spin text-blue-400" />
+            <span>Carregando boletos e débitos pendentes...</span>
+          </div>
+        ) : pendingTxs.length === 0 ? (
+          <div className="p-6 rounded-2xl bg-slate-900/60 border border-slate-800/80 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+            <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+            <span>Nenhuma fatura ou boleto pendente de pagamento para esta entidade.</span>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {pendingTxs.map((tx) => {
+              const todayStr = new Date().toISOString().split('T')[0];
+              const isOverdue = tx.transactionDate < todayStr;
+              const isToday = tx.transactionDate === todayStr;
+
+              return (
+                <div
+                  key={tx.id}
+                  className={cn(
+                    'p-4 rounded-2xl border shadow-lg flex flex-col justify-between gap-3 transition-all',
+                    isOverdue
+                      ? 'bg-rose-950/20 border-rose-500/40 hover:border-rose-500/60'
+                      : isToday
+                      ? 'bg-amber-950/20 border-amber-500/40 hover:border-amber-500/60'
+                      : 'bg-slate-900 border-slate-800 hover:border-slate-700'
+                  )}
+                >
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-bold text-slate-200 truncate">{tx.description}</span>
+                      <span
+                        className={cn(
+                          'px-2 py-0.5 rounded text-[9px] font-extrabold uppercase tracking-wider border font-mono flex items-center gap-1',
+                          isOverdue
+                            ? 'bg-rose-950 text-rose-300 border-rose-500/50'
+                            : isToday
+                            ? 'bg-amber-950 text-amber-300 border-amber-500/50'
+                            : 'bg-slate-800 text-blue-300 border-slate-700'
+                        )}
+                      >
+                        {isOverdue && <AlertTriangle className="h-3 w-3 text-rose-400" />}
+                        {isOverdue ? 'Vencido' : isToday ? 'Vence Hoje' : 'A Vencer'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs text-slate-400 font-mono">
+                      <span>Vencimento: {tx.transactionDate}</span>
+                      <span className="font-semibold text-slate-300">{tx.type === 'EXPENSE' ? 'Despesa' : 'Receita'}</span>
+                    </div>
+
+                    <div className="text-xl font-extrabold font-mono text-slate-100 pt-1">
+                      {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPayingTx(tx);
+                      if (tx.accountId) setSelectedAccountId(tx.accountId);
+                    }}
+                    className="w-full mt-2 px-3 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold shadow-md flex items-center justify-center gap-1.5 transition-all"
+                  >
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>Dar Baixa (Confirmar Pagamento)</span>
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       {/* Active Debts List */}
@@ -406,6 +539,73 @@ export default function DebtsPage() {
           })
         )}
       </div>
+
+      {/* Pay Pending Transaction Modal */}
+      {payingTx && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4">
+          <div className="w-full max-w-md p-6 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl space-y-4">
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Wallet className="h-5 w-5 text-emerald-400" />
+              Dar Baixa no Débito Pendente
+            </h3>
+
+            <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 space-y-1 text-xs">
+              <div className="text-slate-400">Descrição: <strong className="text-slate-200">{payingTx.description}</strong></div>
+              <div className="text-slate-400">Valor a Debitar: <strong className="text-emerald-400 font-mono text-sm">{payingTx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</strong></div>
+              <div className="text-slate-400">Vencimento Original: <strong className="text-slate-300 font-mono">{payingTx.transactionDate}</strong></div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-300 block">
+                Selecione a Conta Bancária para Débito
+              </label>
+              <select
+                value={selectedAccountId}
+                onChange={(e) => setSelectedAccountId(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs font-medium focus:outline-none focus:border-emerald-500"
+              >
+                {accounts.map((acc) => (
+                  <option key={acc.id} value={acc.id}>
+                    {acc.name} (Saldo: {acc.currentBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })})
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-slate-300 block flex items-center gap-1">
+                <Calendar className="h-3.5 w-3.5 text-emerald-400" />
+                Data da Efetivação / Pagamento
+              </label>
+              <input
+                type="date"
+                required
+                value={payDate}
+                onChange={(e) => setPayDate(e.target.value)}
+                className="w-full px-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs font-medium focus:outline-none focus:border-emerald-500"
+              />
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setPayingTx(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handlePayTxSubmit}
+                disabled={isSubmittingPay}
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 shadow-md"
+              >
+                {isSubmittingPay ? 'Efetuando débito...' : 'Confirmar e Debitar Saldo'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Pay Installment Modal */}
       {payingInstallment && (

@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Saba Finanças PF/PJ - Controle Financeiro',
+  title: 'Mel & Saba Finanças PF/PJ - Controle Financeiro',
   description: 'Gestão Financeira integrada de Pessoa Física e Jurídica.',
   icons: {
     icon: '/icon.svg',
@@ -42,6 +42,24 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="pt-BR" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased dark`}>
+      <head>
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+              if (typeof window !== 'undefined' && Element.prototype.releasePointerCapture) {
+                const origRelease = Element.prototype.releasePointerCapture;
+                Element.prototype.releasePointerCapture = function(pointerId) {
+                  try {
+                    if (!this.hasPointerCapture || this.hasPointerCapture(pointerId)) {
+                      origRelease.call(this, pointerId);
+                    }
+                  } catch (e) {}
+                };
+              }
+            `,
+          }}
+        />
+      </head>
       <body className="min-h-full flex flex-col bg-slate-950 text-slate-100 selection:bg-emerald-500 selection:text-slate-950">
         {children}
       </body>
