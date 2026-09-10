@@ -73,8 +73,20 @@ VALUES
   ('c2222222-2222-2222-2222-dddddddddddd', '22222222-2222-2222-2222-222222222222', 'Viagens & Representação Comercial', 'EXPENSE', 'plane', '#3b82f6'),
   ('c2222222-2222-2222-2222-eeeeeeeeeeee', '22222222-2222-2222-2222-222222222222', 'Tarifas Bancárias & Maquininha', 'EXPENSE', 'credit-card', '#64748b'),
   ('c2222222-2222-2222-2222-ffffffffffff', '22222222-2222-2222-2222-222222222222', 'Manutenção & Equipamentos', 'EXPENSE', 'wrench', '#d97706')
-ON CONFLICT (id) DO UPDATE SET
-  name = EXCLUDED.name,
-  nature = EXCLUDED.nature,
-  icon = EXCLUDED.icon,
-  color_hex = EXCLUDED.color_hex;
+-- 6. Tabela de Faturas de Cartão de Crédito
+CREATE TABLE IF NOT EXISTS credit_card_invoices (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    due_date DATE NOT NULL,
+    reference_month TEXT NOT NULL,
+    total_amount NUMERIC(14,2) NOT NULL DEFAULT 0.00,
+    status TEXT NOT NULL DEFAULT 'CLOSED',
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Adicionar coluna invoice_id na tabela transactions se não existir
+ALTER TABLE transactions ADD COLUMN IF NOT EXISTS invoice_id UUID REFERENCES credit_card_invoices(id) ON DELETE SET NULL;
+
+ALTER TABLE IF EXISTS credit_card_invoices DISABLE ROW LEVEL SECURITY;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO anon, authenticated, service_role;
+

@@ -12,6 +12,8 @@ export type DebtStatus = 'ACTIVE' | 'PAID_OFF' | 'RENEGOTIATED';
 
 export type InstallmentStatus = 'PENDING' | 'PAID';
 
+export type InvoiceStatus = 'OPEN' | 'CLOSED' | 'PAID';
+
 export interface User {
   id: string;
   email: string;
@@ -39,6 +41,7 @@ export interface Account {
   closingDay?: number | null;
   dueDay?: number | null;
   creditLimit?: number | null;
+  cardImageUrl?: string | null;
   createdAt?: string;
 }
 
@@ -89,6 +92,18 @@ export interface Budget {
   createdAt?: string;
 }
 
+export interface CreditCardInvoice {
+  id: string;
+  accountId: string;
+  accountName?: string;
+  dueDate: string; // YYYY-MM-DD
+  referenceMonth: string; // YYYY-MM or Mês/Ano
+  totalAmount: number;
+  status: InvoiceStatus;
+  createdAt?: string;
+  transactions?: Transaction[];
+}
+
 export interface Transaction {
   id: string;
   userId: string;
@@ -97,6 +112,7 @@ export interface Transaction {
   destinationAccountId?: string | null;
   categoryId?: string | null;
   debtInstallmentId?: string | null;
+  invoiceId?: string | null;
   type: TransactionType;
   amount: number;
   transactionDate: string; // YYYY-MM-DD
@@ -144,4 +160,5 @@ export interface CreditCardMetrics {
   availableLimit: number;
   limitUsagePercentage: number;
 }
+
 

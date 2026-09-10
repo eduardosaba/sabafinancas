@@ -1,6 +1,7 @@
 'use client';
 
 import React from 'react';
+import { ThemeProvider } from '@/contexts/theme-context';
 import { EntityProvider } from '@/contexts/entity-context';
 import { DateFilterProvider } from '@/contexts/date-filter-context';
 import { ToastProvider } from '@/contexts/toast-context';
@@ -15,32 +16,34 @@ export default function DashboardLayout({
 }) {
   return (
     <ToastProvider>
-      <EntityProvider>
-        <DateFilterProvider>
-          {/* Splash screen component */}
-          <SplashScreen />
+      <ThemeProvider>
+        <EntityProvider>
+          <DateFilterProvider>
+            {/* Splash screen component */}
+            <SplashScreen />
 
-          <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans">
-            {/* Header */}
-            <Header />
+            <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans transition-colors duration-300">
+              {/* Header */}
+              <Header />
 
-            {/* Body layout with Sidebar and Main Content */}
-            <div className="flex-1 flex w-full">
-              <Sidebar />
+              {/* Body layout with Sidebar and Main Content */}
+              <div className="flex-1 flex w-full">
+                <Sidebar />
 
-              <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8 overflow-y-auto max-w-7xl mx-auto w-full">
-                {children}
-              </main>
+                <main className="flex-1 p-4 sm:p-6 lg:p-8 pb-20 lg:pb-8 overflow-y-auto max-w-7xl mx-auto w-full">
+                  {children}
+                </main>
+              </div>
+
+              {/* Mobile Bottom Navigation */}
+              <MobileBottomNav />
+
+              {/* Floating Financial Calculator */}
+              <FloatingCalculator />
             </div>
-
-            {/* Mobile Bottom Navigation */}
-            <MobileBottomNav />
-
-            {/* Floating Financial Calculator */}
-            <FloatingCalculator />
-          </div>
-        </DateFilterProvider>
-      </EntityProvider>
+          </DateFilterProvider>
+        </EntityProvider>
+      </ThemeProvider>
     </ToastProvider>
   );
 }

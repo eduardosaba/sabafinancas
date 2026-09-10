@@ -5,10 +5,12 @@ import {
   Budget,
   Category,
   CategoryBreakdownItem,
+  CreditCardInvoice,
   DailyCashFlowItem,
   Debt,
   DebtInstallment,
   Entity,
+  InvoiceStatus,
   Transaction,
   TransactionNature,
   TransactionType,
@@ -59,6 +61,7 @@ export interface CreateAccountInput {
   closingDay?: number | null;
   dueDay?: number | null;
   creditLimit?: number | null;
+  cardImageUrl?: string | null;
 }
 
 export interface CreateCategoryInput {
@@ -264,6 +267,7 @@ export async function fetchAccounts(entityType?: string): Promise<Account[]> {
     closingDay: item.closing_day ? Number(item.closing_day) : null,
     dueDay: item.due_day ? Number(item.due_day) : null,
     creditLimit: item.credit_limit ? Number(item.credit_limit) : null,
+    cardImageUrl: item.card_image_url || null,
     createdAt: item.created_at,
   }));
 
@@ -312,16 +316,25 @@ export async function createAccount(input: CreateAccountInput): Promise<Account>
   if (input.closingDay !== undefined) payload.closing_day = input.closingDay;
   if (input.dueDay !== undefined) payload.due_day = input.dueDay;
   if (input.creditLimit !== undefined) payload.credit_limit = input.creditLimit;
+  if (input.cardImageUrl !== undefined) payload.card_image_url = input.cardImageUrl;
 
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('accounts')
     .insert(payload)
     .select()
     .single();
 
-  if (error) {
+  // Graceful fallback if card_image_url column does not exist in Supabase schema yet
+  if (error && error.message?.includes('card_image_url')) {
+    delete payload.card_image_url;
+    const retry = await supabase.from('accounts').insert(payload).select().single();
+    data = retry.data;
+    error = retry.error;
+  }
+
+  if (error || !data) {
     console.error('Erro detalhado Supabase (createAccount):', error);
-    throw new Error(`Falha ao criar conta bancária no Supabase: ${error.message}`);
+    throw new Error(`Falha ao criar conta bancária no Supabase: ${error?.message}`);
   }
 
   return {
@@ -336,6 +349,7 @@ export async function createAccount(input: CreateAccountInput): Promise<Account>
     closingDay: data.closing_day ? Number(data.closing_day) : null,
     dueDay: data.due_day ? Number(data.due_day) : null,
     creditLimit: data.credit_limit ? Number(data.credit_limit) : null,
+    cardImageUrl: data.card_image_url || null,
     createdAt: data.created_at,
   };
 }
@@ -354,8 +368,17 @@ export async function updateAccount(
   if (updates.closingDay !== undefined) payload.closing_day = updates.closingDay;
   if (updates.dueDay !== undefined) payload.due_day = updates.dueDay;
   if (updates.creditLimit !== undefined) payload.credit_limit = updates.creditLimit;
+  if (updates.cardImageUrl !== undefined) payload.card_image_url = updates.cardImageUrl;
 
-  const { error } = await supabase.from('accounts').update(payload).eq('id', id);
+  let { error } = await supabase.from('accounts').update(payload).eq('id', id);
+
+  // Graceful fallback if card_image_url column does not exist in Supabase schema yet
+  if (error && error.message?.includes('card_image_url')) {
+    delete payload.card_image_url;
+    const retry = await supabase.from('accounts').update(payload).eq('id', id);
+    error = retry.error;
+  }
+
   if (error) {
     console.error('Erro detalhado Supabase (updateAccount):', error);
     throw new Error(`Falha ao atualizar conta no Supabase: ${error.message}`);
@@ -535,6 +558,7 @@ export async function fetchTransactions(filters: {
     destinationAccountId: item.destination_account_id,
     categoryId: item.category_id,
     debtInstallmentId: item.debt_installment_id,
+    invoiceId: item.invoice_id,
     type: item.type,
     amount: Number(item.amount),
     transactionDate: item.transaction_date,
@@ -754,12 +778,159 @@ export async function createTransaction(input: CreateTransactionInput): Promise<
   };
 }
 
+// -------------------------------------------------------------
+// CREDIT CARD INVOICES
+// -------------------------------------------------------------
+
+/**
+ * Buscas lançamentos de cartão de crédito pendentes com invoice_id nulo ou status aberto
+ */
+export async function fetchOpenInvoiceTransactions(accountId: string): Promise<Transaction[]> {
+  const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
+    const res = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('status', 'PENDING')
+      .is('invoice_id', null)
+      .order('transaction_date', { ascending: true });
+    return res;
+  });
+
+  if (error) {
+    console.error('Erro detalhado Supabase (fetchOpenInvoiceTransactions):', error);
+    return [];
+  }
+
+  return (data || []).map((item: any) => ({
+    id: item.id,
+    userId: item.user_id,
+    entityId: item.entity_id,
+    accountId: item.account_id,
+    destinationAccountId: item.destination_account_id,
+    categoryId: item.category_id,
+    debtInstallmentId: item.debt_installment_id,
+    invoiceId: item.invoice_id,
+    type: item.type,
+    amount: Number(item.amount),
+    transactionDate: item.transaction_date,
+    description: item.description,
+    status: item.status,
+    createdAt: item.created_at,
+  }));
+}
+
+/**
+ * Fecha uma fatura de cartão de crédito, consolidando os lançamentos checados.
+ */
+export async function closeInvoice(input: {
+  accountId: string;
+  dueDate: string;
+  referenceMonth: string;
+  transactionIds: string[];
+  totalAmount: number;
+}): Promise<CreditCardInvoice> {
+  const supabase = createClient();
+
+  // 1. Cria registro na tabela credit_card_invoices
+  const { data: invoiceData, error: invoiceErr } = await supabase
+    .from('credit_card_invoices')
+    .insert({
+      account_id: input.accountId,
+      due_date: input.dueDate,
+      reference_month: input.referenceMonth,
+      total_amount: input.totalAmount,
+      status: 'CLOSED',
+    })
+    .select()
+    .single();
+
+  if (invoiceErr || !invoiceData) {
+    console.error('Erro ao fechar fatura no Supabase:', invoiceErr);
+    throw new Error(`Falha ao fechar fatura no Supabase: ${invoiceErr?.message}`);
+  }
+
+  // 2. Vincula os lançamentos selecionados a esta fatura
+  if (input.transactionIds.length > 0) {
+    const { error: txErr } = await supabase
+      .from('transactions')
+      .update({ invoice_id: invoiceData.id })
+      .in('id', input.transactionIds);
+
+    if (txErr) {
+      console.error('Erro ao vincular lançamentos à fatura:', txErr);
+    }
+  }
+
+  return {
+    id: invoiceData.id,
+    accountId: invoiceData.account_id,
+    dueDate: invoiceData.due_date,
+    referenceMonth: invoiceData.reference_month,
+    totalAmount: Number(invoiceData.total_amount),
+    status: invoiceData.status,
+    createdAt: invoiceData.created_at,
+  };
+}
+
+/**
+ * Busca faturas fechadas com status 'CLOSED'
+ */
+export async function fetchClosedInvoices(entityType?: string): Promise<CreditCardInvoice[]> {
+  const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
+    const res = await supabase
+      .from('credit_card_invoices')
+      .select('*, accounts(*)')
+      .eq('status', 'CLOSED')
+      .order('due_date', { ascending: true });
+    return res;
+  });
+
+  if (error || !data) {
+    if (error && !error.message?.includes('does not exist')) {
+      console.error('Erro ao carregar faturas fechadas:', error);
+    }
+    return [];
+  }
+
+  const allAccounts = await fetchAccounts().catch(() => []);
+  const accountMap = new Map(allAccounts.map((a) => [a.id, a]));
+
+  const invoices: CreditCardInvoice[] = data.map((item: any) => {
+    const acc = accountMap.get(item.account_id) || item.accounts;
+    return {
+      id: item.id,
+      accountId: item.account_id,
+      accountName: acc?.name || 'Cartão de Crédito',
+      dueDate: item.due_date,
+      referenceMonth: item.reference_month,
+      totalAmount: Number(item.total_amount),
+      status: item.status,
+      createdAt: item.created_at,
+    };
+  });
+
+  if (!entityType || entityType === 'CONSOLIDATED') {
+    return invoices;
+  }
+
+  return invoices.filter((inv) => {
+    const acc = accountMap.get(inv.accountId);
+    if (!acc) return true;
+    if (acc.entityId === entityType) return true;
+    if (entityType === 'PF' && (acc.entityId === '11111111-1111-1111-1111-111111111111' || acc.entityId === 'PF')) return true;
+    if (entityType === 'PJ' && (acc.entityId === '22222222-2222-2222-2222-222222222222' || acc.entityId === 'PJ')) return true;
+    return false;
+  });
+}
+
 export async function payCreditCardInvoice(
   creditCardAccountId: string,
   sourceAccountId: string,
   paymentAmount: number,
   paymentDate?: string,
-  targetDueDate?: string
+  targetDueDate?: string,
+  invoiceId?: string
 ): Promise<boolean> {
   const supabase = createClient();
   const payDate = paymentDate || new Date().toISOString().split('T')[0];
@@ -784,36 +955,65 @@ export async function payCreditCardInvoice(
     status: 'PAID',
   });
 
-  // 2. Mark pending card transactions up to paymentAmount as PAID
-  let query = supabase
-    .from('transactions')
-    .select('*')
-    .eq('account_id', creditCardAccountId)
-    .eq('status', 'PENDING')
-    .order('transaction_date', { ascending: true });
+  // 2. Se a fatura fechada específica foi informada ou existe fatura CLOSED para este cartão
+  if (invoiceId) {
+    await supabase
+      .from('credit_card_invoices')
+      .update({ status: 'PAID' })
+      .eq('id', invoiceId);
 
-  if (targetDueDate) {
-    query = query.lte('transaction_date', targetDueDate);
-  }
+    await supabase
+      .from('transactions')
+      .update({ status: 'PAID' })
+      .eq('invoice_id', invoiceId);
+  } else {
+    // Buscar faturas CLOSED deste cartão
+    const { data: closedInvs } = await supabase
+      .from('credit_card_invoices')
+      .select('id')
+      .eq('account_id', creditCardAccountId)
+      .eq('status', 'CLOSED')
+      .order('due_date', { ascending: true });
 
-  const { data: pendingCardTxs } = await query;
+    if (closedInvs && closedInvs.length > 0) {
+      for (const inv of closedInvs) {
+        await supabase.from('credit_card_invoices').update({ status: 'PAID' }).eq('id', inv.id);
+        await supabase.from('transactions').update({ status: 'PAID' }).eq('invoice_id', inv.id);
+      }
+    }
 
-  if (pendingCardTxs && pendingCardTxs.length > 0) {
-    let remainingPayment = paymentAmount;
-    for (const tx of pendingCardTxs) {
-      const txAmt = Number(tx.amount);
-      if (remainingPayment >= txAmt) {
-        await supabase
-          .from('transactions')
-          .update({ status: 'PAID' })
-          .eq('id', tx.id);
-        remainingPayment -= txAmt;
+    // Marca também as transações pendentes legadas até o valor pago
+    let query = supabase
+      .from('transactions')
+      .select('*')
+      .eq('account_id', creditCardAccountId)
+      .eq('status', 'PENDING')
+      .order('transaction_date', { ascending: true });
+
+    if (targetDueDate) {
+      query = query.lte('transaction_date', targetDueDate);
+    }
+
+    const { data: pendingCardTxs } = await query;
+
+    if (pendingCardTxs && pendingCardTxs.length > 0) {
+      let remainingPayment = paymentAmount;
+      for (const tx of pendingCardTxs) {
+        const txAmt = Number(tx.amount);
+        if (remainingPayment >= txAmt) {
+          await supabase
+            .from('transactions')
+            .update({ status: 'PAID' })
+            .eq('id', tx.id);
+          remainingPayment -= txAmt;
+        }
       }
     }
   }
 
   return true;
 }
+
 
 export async function deleteTransaction(id: string): Promise<boolean> {
   const supabase = createClient();

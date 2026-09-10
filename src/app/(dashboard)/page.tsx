@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import Link from 'next/link';
 import {
   User,
   Building2,
@@ -27,6 +28,7 @@ import { CashFlowChart } from '@/components/dashboard/cash-flow-chart';
 import { CategoryExpenseChart } from '@/components/dashboard/category-expense-chart';
 import { BudgetTracker } from '@/components/dashboard/budget-tracker';
 import { CurrencyInput } from '@/components/ui/currency-input';
+import { InvoiceCloseModal } from '@/components/transactions/invoice-close-modal';
 import {
   Account,
   Budget,
@@ -70,8 +72,9 @@ export default function DashboardPage() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isSeeded, setIsSeeded] = useState<boolean>(false);
 
-  // Credit Card invoice payment modal state
+  // Credit Card invoice modal state
   const [payingCardAccount, setPayingCardAccount] = useState<Account | null>(null);
+  const [closingInvoiceCardAccount, setClosingInvoiceCardAccount] = useState<Account | null>(null);
   const [payInvoiceAmount, setPayInvoiceAmount] = useState<string>('0');
   const [payInvoiceSourceAccId, setPayInvoiceSourceAccId] = useState<string>('');
   const [payInvoiceDate, setPayInvoiceDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -467,10 +470,20 @@ export default function DashboardPage() {
       {/* GESTÃO DE CARTÕES DE CRÉDITO E FATURAS */}
       {accounts.some((a) => a.accountType === 'CREDIT_CARD') && (
         <div className="space-y-4">
-          <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
-            <CreditCard className="h-5 w-5 text-blue-400" />
-            Gestão de Cartões de Crédito e Faturas
-          </h2>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <CreditCard className="h-5 w-5 text-blue-400" />
+              Gestão de Cartões de Crédito e Faturas
+            </h2>
+
+            <Link
+              href="/cards"
+              className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 bg-blue-950/60 hover:bg-blue-900/60 px-3 py-1.5 rounded-xl border border-blue-500/30 transition-all shadow-sm"
+            >
+              <span>Ver Painel Completo de Cartões</span>
+              <span>&rarr;</span>
+            </Link>
+          </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
             {accounts
@@ -534,23 +547,44 @@ export default function DashboardPage() {
                       </div>
                     </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPayingCardAccount(acc);
-                        setPayInvoiceAmount(cardMetrics.openStatementTotal.toString());
-                        if (checkingAccounts.length > 0) setPayInvoiceSourceAccId(checkingAccounts[0].id);
-                      }}
-                      className="w-full px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
-                    >
-                      <Receipt className="h-4 w-4" />
-                      <span>Pagar Fatura do Cartão (Transferência)</span>
-                    </button>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => setClosingInvoiceCardAccount(acc)}
+                        className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-blue-300 font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5 border border-slate-700"
+                      >
+                        <ShieldCheck className="h-4 w-4 text-blue-400" />
+                        <span>[ Gerenciar / Fechar Fatura ]</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPayingCardAccount(acc);
+                          setPayInvoiceAmount(cardMetrics.openStatementTotal.toString());
+                          if (checkingAccounts.length > 0) setPayInvoiceSourceAccId(checkingAccounts[0].id);
+                        }}
+                        className="px-3 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <Receipt className="h-4 w-4" />
+                        <span>Pagar Fatura Direta</span>
+                      </button>
+                    </div>
                   </div>
                 );
               })}
           </div>
         </div>
+      )}
+
+      {/* Invoice Close Modal */}
+      {closingInvoiceCardAccount && (
+        <InvoiceCloseModal
+          isOpen={!!closingInvoiceCardAccount}
+          onClose={() => setClosingInvoiceCardAccount(null)}
+          account={closingInvoiceCardAccount}
+          onSuccess={loadData}
+        />
       )}
 
       {/* Pay Credit Card Invoice Modal */}

@@ -144,3 +144,84 @@ export function calculateCreditCardMetrics(
   };
 }
 
+export interface AggregatedCreditCardKPIs {
+  totalOpenStatement: number;
+  totalFutureStatements: number;
+  totalUsedCredit: number;
+  totalCreditLimit: number;
+  totalAvailableLimit: number;
+  globalLimitUsagePercentage: number;
+  incomeCommitmentPercentage: number;
+  isIncomeCommitmentHigh: boolean;
+  bestCardToUseToday: Account | null;
+  bestCardDaysUntilClosing: number;
+}
+
+/**
+ * Calculates aggregated Credit Card KPIs across multiple accounts, including income commitment % and best card to use today.
+ */
+export function calculateAggregatedCreditCardKPIs(
+  accounts: Account[],
+  transactions: Transaction[],
+  monthlyIncome: number = 0
+): AggregatedCreditCardKPIs {
+  const cardAccounts = accounts.filter((a) => a.accountType === 'CREDIT_CARD');
+
+  let totalOpenStatement = 0;
+  let totalFutureStatements = 0;
+  let totalUsedCredit = 0;
+  let totalCreditLimit = 0;
+  let totalAvailableLimit = 0;
+
+  let bestCard: Account | null = null;
+  let maxDaysUntilClosing = -1;
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  cardAccounts.forEach((acc) => {
+    const metrics = calculateCreditCardMetrics(acc, transactions);
+    totalOpenStatement += metrics.openStatementTotal;
+    totalFutureStatements += metrics.futureStatementsTotal;
+    totalUsedCredit += metrics.totalUsedCredit;
+    totalCreditLimit += metrics.creditLimit;
+    totalAvailableLimit += metrics.availableLimit;
+
+    // Calculate days until next closing day for best card to use today algorithm
+    const closingDay = acc.closingDay || 25;
+    let nextClosingDate = new Date(today.getFullYear(), today.getMonth(), closingDay);
+    if (today.getDate() > closingDay) {
+      nextClosingDate = new Date(today.getFullYear(), today.getMonth() + 1, closingDay);
+    }
+    const diffTime = nextClosingDate.getTime() - today.getTime();
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays > maxDaysUntilClosing) {
+      maxDaysUntilClosing = diffDays;
+      bestCard = acc;
+    }
+  });
+
+  const globalLimitUsagePercentage =
+    totalCreditLimit > 0
+      ? Math.min(100, Math.round((totalUsedCredit / totalCreditLimit) * 100))
+      : 0;
+
+  const incomeCommitmentPercentage =
+    monthlyIncome > 0 ? Math.min(100, Math.round((totalOpenStatement / monthlyIncome) * 100)) : 0;
+
+  return {
+    totalOpenStatement,
+    totalFutureStatements,
+    totalUsedCredit,
+    totalCreditLimit,
+    totalAvailableLimit,
+    globalLimitUsagePercentage,
+    incomeCommitmentPercentage,
+    isIncomeCommitmentHigh: incomeCommitmentPercentage >= 30,
+    bestCardToUseToday: bestCard,
+    bestCardDaysUntilClosing: maxDaysUntilClosing,
+  };
+}
+
+

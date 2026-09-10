@@ -302,7 +302,11 @@ export function TransactionModal({
             {/* Account / Source Account */}
             <div className="space-y-1">
               <label className="font-semibold text-slate-300 block">
-                {activeTab === 'TRANSFER' ? 'Conta de Origem (Débito)' : 'Conta Bancária'}
+                {activeTab === 'TRANSFER'
+                  ? 'Conta de Origem (Débito)'
+                  : accounts.find((a) => a.id === accountId)?.accountType === 'CREDIT_CARD'
+                  ? 'Cartão de Crédito'
+                  : 'Conta Bancária'}
               </label>
               <select
                 value={accountId}
@@ -331,7 +335,7 @@ export function TransactionModal({
               <div className="p-2.5 rounded-xl bg-blue-950/80 border border-blue-800/60 text-blue-300 text-[11px] font-medium flex items-center gap-2 sm:col-span-2">
                 <CreditCard className="h-4 w-4 text-blue-400 flex-shrink-0" />
                 <span>
-                  <strong>Cartão de Crédito ({accounts.find((a) => a.id === accountId)?.name}):</strong> Fechamento dia {accounts.find((a) => a.id === accountId)?.closingDay || 25}, vencimento dia {accounts.find((a) => a.id === accountId)?.dueDay || 5}. A data final da fatura é calculada automaticamente.
+                  <strong>Cartão de Crédito ({accounts.find((a) => a.id === accountId)?.name}):</strong> Fechamento dia {accounts.find((a) => a.id === accountId)?.closingDay || 25}, vencimento dia {accounts.find((a) => a.id === accountId)?.dueDay || 5}. Lançamentos entram no ciclo aberto do cartão.
                 </span>
               </div>
             )}
@@ -376,7 +380,11 @@ export function TransactionModal({
 
             {/* Date */}
             <div className="space-y-1">
-              <label className="font-semibold text-slate-300 block">Data do Lançamento</label>
+              <label className="font-semibold text-slate-300 block">
+                {accounts.find((a) => a.id === accountId)?.accountType === 'CREDIT_CARD'
+                  ? 'Data da Compra'
+                  : 'Data do Lançamento'}
+              </label>
               <input
                 type="date"
                 required
@@ -396,8 +404,17 @@ export function TransactionModal({
                     onChange={(e) => setStatus(e.target.value as 'PAID' | 'PENDING')}
                     className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500"
                   >
-                    <option value="PAID">Pago / Concluído</option>
-                    <option value="PENDING">Pendente / A Vencer</option>
+                    {accounts.find((a) => a.id === accountId)?.accountType === 'CREDIT_CARD' ? (
+                      <>
+                        <option value="PENDING">Lançado na Fatura (Aberto)</option>
+                        <option value="PAID">Fatura Paga / Concluído</option>
+                      </>
+                    ) : (
+                      <>
+                        <option value="PAID">Pago / Concluído</option>
+                        <option value="PENDING">Pendente / A Vencer</option>
+                      </>
+                    )}
                   </select>
                 </div>
 

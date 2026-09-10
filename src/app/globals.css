@@ -1,8 +1,18 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #020617;
+  --foreground: #f8fafc;
+}
+
+html.light {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+html.dark {
+  --background: #020617;
+  --foreground: #f8fafc;
 }
 
 @theme inline {
@@ -12,13 +22,6 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 html,
 body {
   background: var(--background);
@@ -26,5 +29,353 @@ body {
   font-family: Arial, Helvetica, sans-serif;
   max-width: 100vw;
   overflow-x: hidden;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
+/* ==========================================
+   LIGHT MODE COMPLETE & CRISP DESIGN SYSTEM
+   ========================================== */
+
+/* Main Page Body Background (Pure Neutral Off-White, No Blue Tint) */
+html.light body {
+  background-color: #f9fafb !important;
+  color: #111827 !important;
+}
+
+/* HEADER LIGHT MODE (Pure White Header Bar) */
+html.light header,
+html.light header[class*="bg-slate"],
+html.light .sticky.top-0 {
+  background-color: #ffffff !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Header Container Boxes (Pill Wrapper, Date Selector, Theme Toggle, Hamburger) */
+html.light header [class*="bg-slate-900"],
+html.light header [class*="bg-slate-950"] {
+  background-color: #f3f4f6 !important;
+  border-color: #e5e7eb !important;
+  color: #111827 !important;
+}
+
+/* Header Inactive Buttons & Text */
+html.light header button.text-slate-400,
+html.light header span.text-slate-400,
+html.light header button.text-slate-300,
+html.light header span.text-slate-300 {
+  color: #374151 !important;
+}
+
+html.light header .text-slate-100,
+html.light header .text-slate-200 {
+  color: #111827 !important;
+}
+
+/* Header Active Date Period Selector Button */
+html.light header .bg-slate-800 {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Header Active Entity Buttons (PF, PJ, Consolidado) */
+html.light header button.bg-emerald-600,
+html.light header button.bg-blue-600,
+html.light header button.bg-purple-600 {
+  color: #ffffff !important;
+  box-shadow: 0 2px 4px 0 rgba(0, 0, 0, 0.1) !important;
+}
+
+/* Header Mobile Sub-bar */
+html.light .md\:hidden {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+}
+
+/* SIDEBAR LIGHT MODE */
+html.light aside {
+  background-color: #ffffff !important;
+  border-right: 1px solid #e5e7eb !important;
+}
+
+html.light aside nav [class*="bg-slate-900"] {
+  background-color: #f3f4f6 !important;
+  border-color: #e5e7eb !important;
+  color: #111827 !important;
+}
+
+/* CARDS & MAIN CONTAINERS IN LIGHT MODE */
+html.light main {
+  background-color: #f9fafb !important;
+}
+
+html.light main [class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #e5e7eb !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.04), 0 1px 2px -1px rgba(0, 0, 0, 0.04) !important;
+}
+
+html.light main [class*="bg-slate-950"] {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  border-color: #e5e7eb !important;
+}
+
+html.light main [class*="bg-slate-800"] {
+  background-color: #f3f4f6 !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+
+/* SIDEBAR ACTIVE MODE CARD IN LIGHT MODE */
+html.light .bg-emerald-950\/40,
+html.light [class*="bg-emerald-950"] {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+  color: #065f46 !important;
+}
+
+html.light .bg-blue-950\/40,
+html.light [class*="bg-blue-950"] {
+  background-color: #eff6ff !important;
+  border-color: #bfdbfe !important;
+  color: #1e40af !important;
+}
+
+html.light .bg-purple-950\/40,
+html.light [class*="bg-purple-950"] {
+  background-color: #f5f3ff !important;
+  border-color: #ddd6fe !important;
+  color: #5b21b6 !important;
+}
+
+html.light .bg-rose-950\/40,
+html.light [class*="bg-rose-950"] {
+  background-color: #fff1f2 !important;
+  border-color: #fecdd3 !important;
+  color: #9f1239 !important;
+}
+
+/* PENDING PAYMENTS SIDEBAR WIDGET IN LIGHT MODE */
+html.light .pending-payments-widget,
+html.light [class*="pending-payments-widget"] {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .pending-payments-widget div:hover {
+  background-color: #f3f4f6 !important;
+}
+
+html.light .pending-payments-widget span.text-slate-200,
+html.light .pending-payments-widget span.text-slate-300,
+html.light .pending-payments-widget span.text-slate-100 {
+  color: #111827 !important;
+}
+
+html.light .pending-payments-widget [class*="bg-slate-950"] {
+  background-color: #f9fafb !important;
+  border-color: #e5e7eb !important;
+  color: #111827 !important;
+}
+
+html.light .bg-blue-950\/40 * {
+  color: #1e40af !important;
+}
+
+html.light .bg-rose-950\/40 * {
+  color: #9f1239 !important;
+}
+
+html.light .bg-amber-950 {
+  background-color: #fef3c7 !important;
+  color: #b45309 !important;
+  border-color: #fcd34d !important;
+}
+
+html.light .bg-rose-950 {
+  background-color: #ffe4e6 !important;
+  color: #be123c !important;
+  border-color: #fda4af !important;
+}
+
+/* Action buttons inside Pending Payments Sidebar Widget */
+html.light button.bg-blue-950,
+html.light button.bg-blue-950 * {
+  background-color: #2563eb !important;
+  color: #ffffff !important;
+  border-color: #2563eb !important;
+}
+
+html.light button.bg-emerald-950,
+html.light button.bg-emerald-950 * {
+  background-color: #059669 !important;
+  color: #ffffff !important;
+  border-color: #059669 !important;
+}
+
+/* ==========================================
+   3D CREDIT CARD SKINS & CAROUSEL ITEMS (BOTH LIGHT & DARK MODES)
+   ========================================== */
+
+/* Credit Card 3D Skins MUST maintain pure white high-contrast text and dark glass overlay */
+.credit-card-3d-skin,
+html.light .credit-card-3d-skin {
+  border-radius: 1rem !important;
+  overflow: hidden !important;
+}
+
+.credit-card-glass-overlay,
+html.light .credit-card-glass-overlay {
+  background-color: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(0.5px) !important;
+}
+
+.credit-card-3d-skin *,
+html.light .credit-card-3d-skin * {
+  color: #ffffff !important;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8) !important;
+}
+
+.credit-card-3d-skin .text-emerald-200,
+html.light .credit-card-3d-skin .text-emerald-200 {
+  color: #a7f3d0 !important;
+}
+
+.credit-card-3d-skin .text-purple-200,
+html.light .credit-card-3d-skin .text-purple-200 {
+  color: #e9d5ff !important;
+}
+
+
+/* Credit Card Audit Box, Checklist Insets & KPI Cards in Light Mode */
+html.light main [class*="bg-slate-900"] [class*="bg-slate-950"] {
+  background-color: #f3f4f6 !important;
+  border-color: #e5e7eb !important;
+  color: #111827 !important;
+}
+
+html.light main [class*="bg-slate-950"] [class*="bg-slate-900"] {
+  background-color: #ffffff !important;
+  border-color: #e5e7eb !important;
+  color: #111827 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03) !important;
+}
+
+/* ACCENT TEXT COLORS & HIGH CONTRAST TYPOGRAPHY FOR LIGHT MODE */
+html.light {
+  color: #111827 !important;
+}
+
+html.light h1,
+html.light h2,
+html.light h3,
+html.light h4,
+html.light h5,
+html.light h6 {
+  color: #111827 !important;
+}
+
+/* Force dark, bold contrast on all slate/gray/zinc text classes in Light Mode */
+html.light .text-slate-100,
+html.light .text-slate-200,
+html.light .text-slate-300,
+html.light .text-gray-100,
+html.light .text-gray-200,
+html.light .text-gray-300,
+html.light .text-zinc-100,
+html.light .text-zinc-200,
+html.light .text-zinc-300 {
+  color: #111827 !important;
+}
+
+html.light .text-slate-400,
+html.light .text-gray-400,
+html.light .text-zinc-400 {
+  color: #1f2937 !important; /* Bold dark slate gray instead of light gray */
+}
+
+html.light .text-slate-500,
+html.light .text-gray-500,
+html.light .text-zinc-500 {
+  color: #374151 !important; /* Rich charcoal gray for subtext */
+}
+
+html.light .text-slate-600,
+html.light .text-gray-600,
+html.light .text-zinc-600 {
+  color: #4b5563 !important;
+}
+
+/* Deep Rich Accent Colors in Light Mode */
+html.light .text-emerald-300,
+html.light .text-emerald-400,
+html.light .text-emerald-500 {
+  color: #047857 !important; /* Deep rich emerald green */
+}
+
+html.light .text-blue-300,
+html.light .text-blue-400,
+html.light .text-blue-500 {
+  color: #1d4ed8 !important; /* Deep rich royal blue */
+}
+
+html.light .text-purple-300,
+html.light .text-purple-400,
+html.light .text-purple-500 {
+  color: #6d28d9 !important; /* Deep rich purple */
+}
+
+html.light .text-amber-300,
+html.light .text-amber-400,
+html.light .text-amber-500 {
+  color: #b45309 !important; /* Deep rich amber/brown */
+}
+
+html.light .text-rose-300,
+html.light .text-rose-400,
+html.light .text-rose-500 {
+  color: #be123c !important; /* Deep rich ruby red */
+}
+
+/* FORM INPUTS IN LIGHT MODE */
+html.light input[type="text"],
+html.light input[type="number"],
+html.light input[type="date"],
+html.light select,
+html.light textarea {
+  background-color: #ffffff !important;
+  color: #111827 !important;
+  border-color: #d1d5db !important;
+}
+
+html.light input::placeholder,
+html.light textarea::placeholder {
+  color: #6b7280 !important;
+}
+
+/* Keyframes for money animation in splash screen */
+@keyframes floatMoney {
+  0% {
+    transform: translateY(-40px) rotate(0deg) scale(0.8);
+    opacity: 0;
+  }
+  20% {
+    opacity: 1;
+  }
+  80% {
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(100vh) rotate(360deg) scale(1.2);
+    opacity: 0;
+  }
+}
+
+.animate-float-money {
+  animation: floatMoney linear infinite;
+}
