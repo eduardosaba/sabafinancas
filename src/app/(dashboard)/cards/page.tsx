@@ -382,7 +382,7 @@ export default function CreditCardsDashboardPage() {
 
         <div
           ref={carouselRef}
-          className="relative w-full overflow-x-auto pb-4 pt-1 pr-2 no-scrollbar scroll-smooth"
+          className="relative w-full overflow-x-auto pt-3.5 pb-5 px-3 no-scrollbar scroll-smooth"
         >
           <div className="flex items-center gap-4 min-w-max">
 
@@ -390,7 +390,7 @@ export default function CreditCardsDashboardPage() {
             <div
               onClick={() => setSelectedCardId('ALL')}
               className={cn(
-                'relative w-72 h-44 rounded-2xl p-4.5 flex flex-col justify-between cursor-pointer transition-all duration-300 border shadow-xl flex-shrink-0 group overflow-hidden credit-card-3d-skin',
+                'relative w-72 h-44 rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition-all duration-300 border shadow-xl flex-shrink-0 group overflow-hidden credit-card-3d-skin',
                 selectedCardId === 'ALL'
                   ? 'border-blue-400 shadow-blue-950/90 ring-4 ring-blue-500/70 scale-[1.03] z-20'
                   : 'border-slate-800 opacity-85 hover:opacity-100 hover:scale-[1.01]'
@@ -402,35 +402,35 @@ export default function CreditCardsDashboardPage() {
 
               {/* Card Content */}
               <div className="relative z-10 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5 text-indigo-300" />
-                  <span className="text-xs font-black uppercase text-white tracking-wider drop-shadow-sm">
+                <div className="flex items-center gap-2 min-w-0">
+                  <BarChart3 className="h-5 w-5 text-indigo-300 flex-shrink-0" />
+                  <span className="text-xs font-black uppercase text-white tracking-wider drop-shadow-sm truncate max-w-[130px]">
                     Visão Consolidada
                   </span>
                 </div>
                 {selectedCardId === 'ALL' ? (
-                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500 text-white uppercase shadow animate-pulse">
+                  <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-blue-500 text-white uppercase shadow animate-pulse flex-shrink-0">
                     Ativo
                   </span>
                 ) : (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-950/80 text-indigo-200 border border-indigo-500/50">
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-950/80 text-indigo-200 border border-indigo-500/50 flex-shrink-0">
                     {creditCardAccounts.length} Cartões
                   </span>
                 )}
               </div>
 
-              <div className="relative z-10">
+              <div className="relative z-10 my-0.5">
                 <div className="text-[9px] text-indigo-200 uppercase font-bold tracking-wider">
                   Faturas Abertas Acumuladas
                 </div>
-                <div className="text-xl font-extrabold font-mono text-white drop-shadow-sm">
+                <div className="text-xl font-extrabold font-mono text-white drop-shadow-sm truncate">
                   {kpis.totalOpenStatement.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                 </div>
               </div>
 
               <div className="relative z-10 flex items-center justify-between text-[10px] text-indigo-200 border-t border-white/20 pt-2 font-mono">
-                <span>Limite Livre: {kpis.totalAvailableLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
-                <span className="font-bold text-emerald-400">Ver Todos &rarr;</span>
+                <span className="truncate max-w-[170px]">Limite Livre: {kpis.totalAvailableLimit.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                <span className="font-bold text-emerald-400 flex-shrink-0">Ver Todos &rarr;</span>
               </div>
             </div>
 
@@ -446,7 +446,7 @@ export default function CreditCardsDashboardPage() {
                   key={acc.id}
                   onClick={() => setSelectedCardId(acc.id)}
                   className={cn(
-                    'relative w-72 h-44 rounded-2xl p-4.5 flex flex-col justify-between cursor-pointer transition-all duration-300 border shadow-xl flex-shrink-0 group overflow-hidden credit-card-3d-skin',
+                    'relative w-72 h-44 rounded-2xl p-4 flex flex-col justify-between cursor-pointer transition-all duration-300 border shadow-xl flex-shrink-0 group overflow-hidden credit-card-3d-skin',
                     isSelected
                       ? 'border-blue-400 shadow-blue-950/90 ring-4 ring-blue-500/70 scale-[1.03] z-20'
                       : 'border-slate-800 hover:border-slate-700 hover:scale-[1.01]'
