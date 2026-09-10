@@ -358,6 +358,98 @@ html.light textarea::placeholder {
   color: #6b7280 !important;
 }
 
+/* ==========================================
+   FLOATING CALCULATOR LIGHT MODE FIXES
+   ========================================== */
+html.light .floating-calculator-card {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.18) !important;
+}
+
+html.light .floating-calculator-minimized {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.light .floating-calculator-minimized span {
+  color: #0f172a !important;
+}
+
+html.light .floating-calculator-header {
+  background-color: #f8fafc !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
+html.light .floating-calculator-header span,
+html.light .floating-calculator-header button {
+  color: #334155 !important;
+}
+
+html.light .floating-calculator-header button:hover {
+  background-color: #e2e8f0 !important;
+}
+
+html.light .floating-calculator-screen {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light .floating-calculator-screen .history-text {
+  color: #64748b !important;
+}
+
+html.light .floating-calculator-screen .display-text {
+  color: #0f172a !important;
+}
+
+html.light .floating-calculator-btn-digit {
+  background-color: #ffffff !important;
+  color: #0f172a !important;
+  border-color: #cbd5e1 !important;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .floating-calculator-btn-digit:hover {
+  background-color: #f8fafc !important;
+  color: #000000 !important;
+}
+
+html.light .floating-calculator-btn-op {
+  background-color: #ecfdf5 !important;
+  color: #047857 !important;
+  border-color: #a7f3d0 !important;
+}
+
+html.light .floating-calculator-btn-op:hover {
+  background-color: #d1fae5 !important;
+  color: #065f46 !important;
+}
+
+html.light .floating-calculator-btn-clear {
+  background-color: #fff1f2 !important;
+  color: #be123c !important;
+  border-color: #fecdd3 !important;
+}
+
+html.light .floating-calculator-btn-clear:hover {
+  background-color: #ffe4e6 !important;
+  color: #9f1239 !important;
+}
+
+html.light .floating-calculator-btn-action {
+  background-color: #f1f5f9 !important;
+  color: #334155 !important;
+  border-color: #cbd5e1 !important;
+}
+
+html.light .floating-calculator-btn-action:hover {
+  background-color: #e2e8f0 !important;
+  color: #0f172a !important;
+}
+
 /* Keyframes for money animation in splash screen */
 @keyframes floatMoney {
   0% {

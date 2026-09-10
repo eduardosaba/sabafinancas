@@ -826,11 +826,13 @@ export async function fetchOpenInvoiceTransactions(accountId: string): Promise<T
 export async function closeInvoice(input: {
   accountId: string;
   dueDate: string;
+  closingDate?: string;
   referenceMonth: string;
   transactionIds: string[];
   totalAmount: number;
 }): Promise<CreditCardInvoice> {
   const supabase = createClient();
+  const closingDate = input.closingDate || new Date().toISOString().split('T')[0];
 
   // 1. Cria registro na tabela credit_card_invoices
   const { data: invoiceData, error: invoiceErr } = await supabase
@@ -838,6 +840,7 @@ export async function closeInvoice(input: {
     .insert({
       account_id: input.accountId,
       due_date: input.dueDate,
+      closing_date: closingDate,
       reference_month: input.referenceMonth,
       total_amount: input.totalAmount,
       status: 'CLOSED',
@@ -866,6 +869,7 @@ export async function closeInvoice(input: {
     id: invoiceData.id,
     accountId: invoiceData.account_id,
     dueDate: invoiceData.due_date,
+    closingDate: invoiceData.closing_date,
     referenceMonth: invoiceData.reference_month,
     totalAmount: Number(invoiceData.total_amount),
     status: invoiceData.status,
@@ -903,6 +907,7 @@ export async function fetchClosedInvoices(entityType?: string): Promise<CreditCa
       accountId: item.account_id,
       accountName: acc?.name || 'Cartão de Crédito',
       dueDate: item.due_date,
+      closingDate: item.closing_date,
       referenceMonth: item.reference_month,
       totalAmount: Number(item.total_amount),
       status: item.status,

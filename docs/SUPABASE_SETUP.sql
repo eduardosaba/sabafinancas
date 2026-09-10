@@ -21,12 +21,14 @@ GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO anon, authenticated, s
 -- 3. Inserir Usuário Padrão e Entidades Patrimoniais Iniciais (se não existirem)
 INSERT INTO users (id, email, name)
 VALUES ('00000000-0000-0000-0000-000000000001', 'usuario@financas.com.br', 'Eduardo Finanças')
+ON CONFLICT (email) DO NOTHING;
+
+INSERT INTO entities (id, user_id, name, type)
+SELECT '11111111-1111-1111-1111-111111111111', id, 'Pessoal (PF)', 'PF' FROM users LIMIT 1
 ON CONFLICT (id) DO NOTHING;
 
 INSERT INTO entities (id, user_id, name, type)
-VALUES 
-  ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000001', 'Pessoal (PF)', 'PF'),
-  ('22222222-2222-2222-2222-222222222222', '00000000-0000-0000-0000-000000000001', 'Empresa (PJ)', 'PJ')
+SELECT '22222222-2222-2222-2222-222222222222', id, 'Empresa (PJ)', 'PJ' FROM users LIMIT 1
 ON CONFLICT (id) DO NOTHING;
 
 -- 4. Inserir Contas Bancárias Iniciais (se não existirem)
@@ -73,11 +75,14 @@ VALUES
   ('c2222222-2222-2222-2222-dddddddddddd', '22222222-2222-2222-2222-222222222222', 'Viagens & Representação Comercial', 'EXPENSE', 'plane', '#3b82f6'),
   ('c2222222-2222-2222-2222-eeeeeeeeeeee', '22222222-2222-2222-2222-222222222222', 'Tarifas Bancárias & Maquininha', 'EXPENSE', 'credit-card', '#64748b'),
   ('c2222222-2222-2222-2222-ffffffffffff', '22222222-2222-2222-2222-222222222222', 'Manutenção & Equipamentos', 'EXPENSE', 'wrench', '#d97706')
+ON CONFLICT (id) DO NOTHING;
+
 -- 6. Tabela de Faturas de Cartão de Crédito
 CREATE TABLE IF NOT EXISTS credit_card_invoices (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     account_id UUID NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
     due_date DATE NOT NULL,
+    closing_date DATE NOT NULL DEFAULT CURRENT_DATE,
     reference_month TEXT NOT NULL,
     total_amount NUMERIC(14,2) NOT NULL DEFAULT 0.00,
     status TEXT NOT NULL DEFAULT 'CLOSED',

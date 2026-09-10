@@ -179,7 +179,7 @@ export function FloatingCalculator() {
 
   if (isMinimized) {
     return (
-      <div className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 flex items-center gap-2 p-2 px-3.5 rounded-2xl bg-slate-900/95 border border-slate-800 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-4">
+      <div className="floating-calculator-minimized fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 flex items-center gap-2 p-2 px-3.5 rounded-2xl bg-slate-900/95 border border-slate-800 shadow-2xl backdrop-blur-md animate-in slide-in-from-bottom-4">
         <div className="flex items-center gap-2 cursor-pointer" onClick={() => setIsMinimized(false)}>
           <Calculator className="h-4 w-4 text-emerald-400" />
           <span className="text-xs font-mono font-bold text-slate-200">{display}</span>
@@ -204,10 +204,10 @@ export function FloatingCalculator() {
   }
 
   return (
-    <div className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 w-72 sm:w-80 rounded-3xl bg-slate-950/95 border border-slate-800 shadow-2xl backdrop-blur-xl space-y-3 overflow-hidden animate-in zoom-in-95 duration-200">
+    <div className="floating-calculator-card fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 w-72 sm:w-80 rounded-3xl bg-slate-950/95 border border-slate-800 shadow-2xl backdrop-blur-xl space-y-3 overflow-hidden animate-in zoom-in-95 duration-200">
       
       {/* Header */}
-      <div className="flex items-center justify-between p-3.5 px-4 bg-slate-900/90 border-b border-slate-800 cursor-move">
+      <div className="floating-calculator-header flex items-center justify-between p-3.5 px-4 bg-slate-900/90 border-b border-slate-800 cursor-move">
         <div className="flex items-center gap-2 text-xs font-bold text-slate-200">
           <Calculator className="h-4 w-4 text-emerald-400" />
           <span>Calculadora Financeira</span>
@@ -232,8 +232,8 @@ export function FloatingCalculator() {
       </div>
 
       {/* Screen Display */}
-      <div className="px-4 py-2 space-y-1">
-        <div className="h-4 text-right text-[11px] text-slate-500 font-mono overflow-hidden truncate">
+      <div className="floating-calculator-screen px-4 py-2 space-y-1 mx-3 rounded-2xl bg-slate-900/60 border border-slate-800/80">
+        <div className="history-text h-4 text-right text-[11px] text-slate-500 font-mono overflow-hidden truncate">
           {history}
         </div>
         <div className="flex items-center justify-between gap-2">
@@ -247,7 +247,7 @@ export function FloatingCalculator() {
           >
             {isCopied ? <Check className="h-3.5 w-3.5 text-emerald-400" /> : <Copy className="h-3.5 w-3.5" />}
           </button>
-          <div className="text-2xl sm:text-3xl font-extrabold font-mono text-slate-100 text-right truncate flex-1">
+          <div className="display-text text-2xl sm:text-3xl font-extrabold font-mono text-slate-100 text-right truncate flex-1">
             {display}
           </div>
         </div>
@@ -257,119 +257,119 @@ export function FloatingCalculator() {
       <div className="p-3.5 pt-1 grid grid-cols-4 gap-2">
         <button
           onClick={handleClear}
-          className="p-3 rounded-2xl bg-rose-950/60 text-rose-300 hover:bg-rose-900/80 border border-rose-500/30 font-bold text-xs transition-colors"
+          className="floating-calculator-btn-clear p-3 rounded-2xl bg-rose-950/60 text-rose-300 hover:bg-rose-900/80 border border-rose-500/30 font-bold text-xs transition-colors"
         >
           C
         </button>
         <button
           onClick={handleDelete}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 font-bold text-xs transition-colors flex items-center justify-center"
+          className="floating-calculator-btn-action p-3 rounded-2xl bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 font-bold text-xs transition-colors flex items-center justify-center"
         >
           <Delete className="h-4 w-4" />
         </button>
         <button
           onClick={handlePercent}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 font-bold text-xs transition-colors flex items-center justify-center"
+          className="floating-calculator-btn-action p-3 rounded-2xl bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 font-bold text-xs transition-colors flex items-center justify-center"
         >
           <Percent className="h-4 w-4" />
         </button>
         <button
           onClick={() => handleOp('÷')}
-          className="p-3 rounded-2xl bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 border border-emerald-500/30 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-op p-3 rounded-2xl bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 border border-emerald-500/30 font-bold text-sm transition-colors"
         >
           ÷
         </button>
 
         <button
           onClick={() => handleDigit('7')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           7
         </button>
         <button
           onClick={() => handleDigit('8')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           8
         </button>
         <button
           onClick={() => handleDigit('9')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           9
         </button>
         <button
           onClick={() => handleOp('×')}
-          className="p-3 rounded-2xl bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 border border-emerald-500/30 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-op p-3 rounded-2xl bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 border border-emerald-500/30 font-bold text-sm transition-colors"
         >
           ×
         </button>
 
         <button
           onClick={() => handleDigit('4')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           4
         </button>
         <button
           onClick={() => handleDigit('5')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           5
         </button>
         <button
           onClick={() => handleDigit('6')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           6
         </button>
         <button
           onClick={() => handleOp('-')}
-          className="p-3 rounded-2xl bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 border border-emerald-500/30 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-op p-3 rounded-2xl bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 border border-emerald-500/30 font-bold text-sm transition-colors"
         >
           -
         </button>
 
         <button
           onClick={() => handleDigit('1')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           1
         </button>
         <button
           onClick={() => handleDigit('2')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           2
         </button>
         <button
           onClick={() => handleDigit('3')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           3
         </button>
         <button
           onClick={() => handleOp('+')}
-          className="p-3 rounded-2xl bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 border border-emerald-500/30 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-op p-3 rounded-2xl bg-emerald-950/80 text-emerald-400 hover:bg-emerald-900 border border-emerald-500/30 font-bold text-sm transition-colors"
         >
           +
         </button>
 
         <button
           onClick={handleNegate}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 font-bold text-xs transition-colors"
+          className="floating-calculator-btn-action p-3 rounded-2xl bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 font-bold text-xs transition-colors"
         >
           +/-
         </button>
         <button
           onClick={() => handleDigit('0')}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-digit p-3 rounded-2xl bg-slate-900 text-slate-100 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           0
         </button>
         <button
           onClick={handleDecimal}
-          className="p-3 rounded-2xl bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
+          className="floating-calculator-btn-action p-3 rounded-2xl bg-slate-900 text-slate-300 hover:bg-slate-800 border border-slate-800 font-bold text-sm transition-colors"
         >
           ,
         </button>

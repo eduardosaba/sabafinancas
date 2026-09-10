@@ -97,6 +97,7 @@ export interface CreditCardInvoice {
   accountId: string;
   accountName?: string;
   dueDate: string; // YYYY-MM-DD
+  closingDate?: string; // YYYY-MM-DD
   referenceMonth: string; // YYYY-MM or Mês/Ano
   totalAmount: number;
   status: InvoiceStatus;
