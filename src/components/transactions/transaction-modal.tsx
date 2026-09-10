@@ -321,10 +321,12 @@ export function TransactionModal({
                 className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500"
               >
                 {accounts.map((acc) => {
-                  const isPJ = acc.entityId === 'PJ' || acc.entityId === '22222222-2222-2222-2222-222222222222';
+                  const isPJ = acc.entityId !== '11111111-1111-1111-1111-111111111111' && acc.entityId !== 'PF';
+                  const comp = pjEntities.find((e) => e.id === acc.entityId);
+                  const entityTag = comp ? `PJ - ${comp.name}` : isPJ ? 'PJ' : 'PF';
                   return (
                     <option key={acc.id} value={acc.id}>
-                      {acc.name} ({isPJ ? 'PJ' : 'PF'})
+                      {acc.name} ({entityTag})
                     </option>
                   );
                 })}
@@ -350,10 +352,12 @@ export function TransactionModal({
                   className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500"
                 >
                   {accounts.map((acc) => {
-                    const isPJ = acc.entityId === 'PJ' || acc.entityId === '22222222-2222-2222-2222-222222222222';
+                    const isPJ = acc.entityId !== '11111111-1111-1111-1111-111111111111' && acc.entityId !== 'PF';
+                    const comp = pjEntities.find((e) => e.id === acc.entityId);
+                    const entityTag = comp ? `PJ - ${comp.name}` : isPJ ? 'PJ' : 'PF';
                     return (
                       <option key={acc.id} value={acc.id}>
-                        {acc.name} ({isPJ ? 'PJ' : 'PF'})
+                        {acc.name} ({entityTag})
                       </option>
                     );
                   })}

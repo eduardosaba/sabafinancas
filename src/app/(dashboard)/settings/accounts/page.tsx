@@ -30,8 +30,10 @@ export const CARD_PRESET_TEMPLATES = [
   { id: 'caixa_blue', name: 'Caixa Econômica', color: '#0284c7', bgGradient: 'from-blue-600 via-sky-700 to-blue-900', logo: 'Caixa' },
 ];
 
-function renderEntityBadge(entityId: string) {
-  const isPJ = entityId === 'PJ' || entityId === '22222222-2222-2222-2222-222222222222';
+function renderEntityBadge(entityId: string, pjEntities?: any[]) {
+  const isPJ = entityId !== '11111111-1111-1111-1111-111111111111' && entityId !== 'PF';
+  const comp = pjEntities?.find((e) => e.id === entityId);
+  const label = comp ? `PJ (${comp.name})` : isPJ ? 'PJ' : 'PF';
   return (
     <span
       className={cn(
@@ -41,7 +43,7 @@ function renderEntityBadge(entityId: string) {
           : 'bg-emerald-950/80 text-emerald-400 border-emerald-800/60'
       )}
     >
-      {isPJ ? 'PJ' : 'PF'}
+      {label}
     </span>
   );
 }
@@ -447,7 +449,7 @@ export default function AccountsSettingsPage() {
                         <span className="text-xs font-semibold text-slate-400">
                           {ACCOUNT_TYPE_LABELS[acc.accountType as AccountType] || acc.accountType}
                         </span>
-                        {renderEntityBadge(acc.entityId)}
+                        {renderEntityBadge(acc.entityId, pjEntities)}
                       </div>
                     </div>
                   </div>

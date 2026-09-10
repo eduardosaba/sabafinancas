@@ -62,10 +62,10 @@ export function QuickTransactionInput({
   // Filter accounts according to active Entity Context (PF or PJ, or all if CONSOLIDATED)
   const filteredAccounts = accounts.filter((acc) => {
     if (!entity || entity === 'CONSOLIDATED') return true;
-    if (acc.entityId === entity) return true;
-    if (entity === 'PF' && (acc.entityId === '11111111-1111-1111-1111-111111111111' || acc.entityId === 'PF')) return true;
-    if (entity === 'PJ' && (acc.entityId === '22222222-2222-2222-2222-222222222222' || acc.entityId === 'PJ')) return true;
-    return false;
+    const isAccPJ = acc.entityId !== '11111111-1111-1111-1111-111111111111' && acc.entityId !== 'PF';
+    if (entity === 'PF') return !isAccPJ;
+    if (entity === 'PJ') return isAccPJ;
+    return acc.entityId === entity;
   });
 
   const displayAccounts = filteredAccounts.length > 0 ? filteredAccounts : accounts;
@@ -105,7 +105,8 @@ export function QuickTransactionInput({
       setSelectedEntity('PF');
     } else {
       const acc = displayAccounts.find((a) => a.id === pickedAccId);
-      if (acc?.entityId === 'PJ' || acc?.entityId === '22222222-2222-2222-2222-222222222222') {
+      const isAccPJ = acc?.entityId !== '11111111-1111-1111-1111-111111111111' && acc?.entityId !== 'PF';
+      if (isAccPJ) {
         setSelectedEntity('PJ');
       } else {
         setSelectedEntity('PF');
@@ -406,10 +407,12 @@ export function QuickTransactionInput({
                 className="w-full px-2.5 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs font-medium focus:outline-none focus:border-emerald-500"
               >
                 {accounts.map((acc) => {
-                  const isPJ = acc.entityId === 'PJ' || acc.entityId === '22222222-2222-2222-2222-222222222222';
+                  const isPJ = acc.entityId !== '11111111-1111-1111-1111-111111111111' && acc.entityId !== 'PF';
+                  const comp = pjEntities.find((e) => e.id === acc.entityId);
+                  const entityTag = comp ? `PJ - ${comp.name}` : isPJ ? 'PJ' : 'PF';
                   return (
                     <option key={acc.id} value={acc.id}>
-                      {acc.name} ({isPJ ? 'PJ' : 'PF'})
+                      {acc.name} ({entityTag})
                     </option>
                   );
                 })}
@@ -429,10 +432,12 @@ export function QuickTransactionInput({
                   className="w-full px-2.5 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 text-xs font-medium focus:outline-none focus:border-emerald-500"
                 >
                   {accounts.map((acc) => {
-                    const isPJ = acc.entityId === 'PJ' || acc.entityId === '22222222-2222-2222-2222-222222222222';
+                    const isPJ = acc.entityId !== '11111111-1111-1111-1111-111111111111' && acc.entityId !== 'PF';
+                    const comp = pjEntities.find((e) => e.id === acc.entityId);
+                    const entityTag = comp ? `PJ - ${comp.name}` : isPJ ? 'PJ' : 'PF';
                     return (
                       <option key={acc.id} value={acc.id}>
-                        {acc.name} ({isPJ ? 'PJ' : 'PF'})
+                        {acc.name} ({entityTag})
                       </option>
                     );
                   })}

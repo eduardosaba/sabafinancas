@@ -172,9 +172,9 @@ export function Header() {
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-900 border border-slate-800 text-emerald-400 group-hover:border-slate-700 transition-colors">
                 <Wallet className="h-5 w-5" />
               </div>
-              <div className="hidden sm:block">
-                <span className="text-base font-bold text-slate-100 tracking-tight">Finanças</span>
-                <span className="text-xs ml-1 font-semibold px-1.5 py-0.5 rounded bg-slate-800 text-slate-300">
+              <div className="hidden sm:flex sm:flex-col justify-center leading-tight">
+                <span className="text-sm font-bold text-slate-100 tracking-tight">Finanças</span>
+                <span className="text-[10px] font-medium text-slate-400 tracking-wider">
                   PF / PJ
                 </span>
               </div>

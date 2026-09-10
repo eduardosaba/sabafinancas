@@ -285,7 +285,7 @@ function filterAccountsByEntity(
   return accounts.filter((a) => {
     if (a.entityId === entityType) return true;
     if (entityType === 'PF' && (a.entityId === '11111111-1111-1111-1111-111111111111' || a.entityId === 'PF')) return true;
-    if (entityType === 'PJ' && (a.entityId === '22222222-2222-2222-2222-222222222222' || a.entityId === 'PJ')) return true;
+    if (entityType === 'PJ' && (a.entityId !== '11111111-1111-1111-1111-111111111111' && a.entityId !== 'PF')) return true;
 
     if (entityTypeMap) {
       const type = entityTypeMap.get(a.entityId);

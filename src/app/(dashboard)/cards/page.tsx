@@ -76,7 +76,7 @@ function getCardSkin(account: Account) {
 }
 
 export default function CreditCardsDashboardPage() {
-  const { entity, isHydrated } = useEntity();
+  const { entity, isHydrated, pjEntities } = useEntity();
   const { toast } = useToast();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -494,7 +494,10 @@ export default function CreditCardsDashboardPage() {
                           : 'bg-emerald-950/80 text-emerald-200 border-emerald-500/50'
                       )}
                     >
-                      {isPJ ? 'PJ' : 'PF'}
+                      {(() => {
+                        const comp = pjEntities.find((e) => e.id === acc.entityId);
+                        return comp ? `PJ (${comp.name})` : isPJ ? 'PJ' : 'PF';
+                      })()}
                     </span>
                   </div>
 
