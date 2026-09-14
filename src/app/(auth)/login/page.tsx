@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -16,6 +16,30 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
+
+  // Dynamic subdomain & mode detection
+  const [isFamilyMode, setIsFamilyMode] = useState<boolean>(false);
+  const [modeLoaded, setModeLoaded] = useState<boolean>(false);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname;
+      const search = window.location.search;
+      const storedFamily = localStorage.getItem('modo_familia');
+
+      const isFamily =
+        hostname.includes('saba') ||
+        search.includes('acesso=familia') ||
+        search.includes('rapido=true') ||
+        storedFamily === 'true';
+
+      setIsFamilyMode(isFamily);
+      if (search.includes('acesso=familia') || search.includes('rapido=true')) {
+        localStorage.setItem('modo_familia', 'true');
+      }
+      setModeLoaded(true);
+    }
+  }, []);
 
   const cleanInput = loginInput.trim().toLowerCase();
   const isEduardo = cleanInput === 'eduardosaba' || cleanInput === 'eduardo';
@@ -69,8 +93,10 @@ export default function LoginPage() {
       if (error) {
         setErrorMsg(translateAuthError(error.message));
       } else {
-        router.push('/');
-        router.refresh();
+        if (isFamilyMode && typeof window !== 'undefined') {
+          localStorage.setItem('modo_familia', 'true');
+        }
+        window.location.href = '/';
       }
     } catch {
       setErrorMsg('Falha ao autenticar. Tente novamente mais tarde.');
@@ -88,72 +114,78 @@ export default function LoginPage() {
           <div className="inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 border border-slate-800 text-emerald-400 shadow-xl">
             <Wallet className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl font-extrabold tracking-tight text-white">Mel & Saba Finanças PF / PJ</h1>
-          <p className="text-xs text-slate-400">Selecione seu perfil ou digite seu usuário para acessar</p>
+          <h1 className="text-2xl font-extrabold tracking-tight text-white">
+            {isFamilyMode ? 'Mel & Saba Finanças PF / PJ' : 'Meu Financeiro PF / PJ'}
+          </h1>
+          <p className="text-xs text-slate-400">
+            {isFamilyMode
+              ? 'Selecione seu perfil ou digite seu usuário para acessar'
+              : 'Entre com seu e-mail e senha para gerenciar suas contas'}
+          </p>
         </div>
 
-        {/* 3D Avatars Profile Switcher */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* 3D Avatars Profile Switcher (Only rendered in Family Mode) */}
+        {isFamilyMode && (
+          <div className="grid grid-cols-2 gap-3 animate-in fade-in duration-200">
+            {/* Eduardo Saba Avatar */}
+            <button
+              type="button"
+              onClick={() => setLoginInput('eduardosaba')}
+              className={cn(
+                'p-3 rounded-2xl bg-slate-900 border text-left flex items-center gap-3 transition-all duration-200 group relative overflow-visible',
+                isEduardo
+                  ? 'border-emerald-500 bg-emerald-950/30 ring-2 ring-emerald-500/50 shadow-lg shadow-emerald-950/50'
+                  : 'border-slate-800 hover:border-slate-700 hover:bg-slate-800/50'
+              )}
+            >
+              <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-slate-700 group-hover:scale-[2] hover:scale-[2] transition-transform duration-300 ease-out flex-shrink-0 bg-slate-800 z-30 shadow-xl origin-center">
+                <img
+                  src="/avatars/avatar_eduardo.png"
+                  alt="Eduardo Saba 3D Avatar"
+                  className="w-full h-full object-cover object-top"
+                />
+              </div>
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold text-slate-100 flex items-center gap-1">
+                  <span className="truncate">Eduardo Saba</span>
+                  {isEduardo && <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />}
+                </div>
+                <div className="text-[10px] font-mono text-emerald-400 font-semibold truncate">
+                  eduardosaba
+                </div>
+              </div>
+            </button>
 
-          {/* Eduardo Saba Avatar */}
-          <button
-            type="button"
-            onClick={() => setLoginInput('eduardosaba')}
-            className={cn(
-              'p-3 rounded-2xl bg-slate-900 border text-left flex items-center gap-3 transition-all duration-200 group relative overflow-visible',
-              isEduardo
-                ? 'border-emerald-500 bg-emerald-950/30 ring-2 ring-emerald-500/50 shadow-lg shadow-emerald-950/50'
-                : 'border-slate-800 hover:border-slate-700 hover:bg-slate-800/50'
-            )}
-          >
-            <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-slate-700 group-hover:scale-[2] hover:scale-[2] transition-transform duration-300 ease-out flex-shrink-0 bg-slate-800 z-30 shadow-xl origin-center">
-              <img
-                src="/avatars/avatar_eduardo.png"
-                alt="Eduardo Saba 3D Avatar"
-                className="w-full h-full object-cover object-top"
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-extrabold text-slate-100 flex items-center gap-1">
-                <span className="truncate">Eduardo Saba</span>
-                {isEduardo && <Check className="h-3.5 w-3.5 text-emerald-400 flex-shrink-0" />}
+            {/* Mel Saba Avatar */}
+            <button
+              type="button"
+              onClick={() => setLoginInput('melsaba')}
+              className={cn(
+                'p-3 rounded-2xl bg-slate-900 border text-left flex items-center gap-3 transition-all duration-200 group relative overflow-visible',
+                isMel
+                  ? 'border-blue-500 bg-blue-950/30 ring-2 ring-blue-500/50 shadow-lg shadow-blue-950/50'
+                  : 'border-slate-800 hover:border-slate-700 hover:bg-slate-800/50'
+              )}
+            >
+              <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-slate-700 group-hover:scale-[2] hover:scale-[2] transition-transform duration-300 ease-out flex-shrink-0 bg-slate-800 z-30 shadow-xl origin-center">
+                <img
+                  src="/avatars/avatar_mel.png"
+                  alt="Mel Saba 3D Avatar"
+                  className="w-full h-full object-cover object-top"
+                />
               </div>
-              <div className="text-[10px] font-mono text-emerald-400 font-semibold truncate">
-                eduardosaba
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold text-slate-100 flex items-center gap-1">
+                  <span className="truncate">Mel Saba</span>
+                  {isMel && <Check className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />}
+                </div>
+                <div className="text-[10px] font-mono text-blue-400 font-semibold truncate">
+                  melsaba
+                </div>
               </div>
-            </div>
-          </button>
-
-          {/* Mel Saba Avatar */}
-          <button
-            type="button"
-            onClick={() => setLoginInput('melsaba')}
-            className={cn(
-              'p-3 rounded-2xl bg-slate-900 border text-left flex items-center gap-3 transition-all duration-200 group relative overflow-visible',
-              isMel
-                ? 'border-blue-500 bg-blue-950/30 ring-2 ring-blue-500/50 shadow-lg shadow-blue-950/50'
-                : 'border-slate-800 hover:border-slate-700 hover:bg-slate-800/50'
-            )}
-          >
-            <div className="relative h-12 w-12 rounded-xl overflow-hidden border border-slate-700 group-hover:scale-[2] hover:scale-[2] transition-transform duration-300 ease-out flex-shrink-0 bg-slate-800 z-30 shadow-xl origin-center">
-              <img
-                src="/avatars/avatar_mel.png"
-                alt="Mel Saba 3D Avatar"
-                className="w-full h-full object-cover object-top"
-              />
-            </div>
-            <div className="min-w-0">
-              <div className="text-xs font-extrabold text-slate-100 flex items-center gap-1">
-                <span className="truncate">Mel Saba</span>
-                {isMel && <Check className="h-3.5 w-3.5 text-blue-400 flex-shrink-0" />}
-              </div>
-              <div className="text-[10px] font-mono text-blue-400 font-semibold truncate">
-                melsaba
-              </div>
-            </div>
-          </button>
-
-        </div>
+            </button>
+          </div>
+        )}
 
         {/* Form Card */}
         <form
@@ -177,7 +209,7 @@ export default function LoginPage() {
                 required
                 value={loginInput}
                 onChange={(e) => setLoginInput(e.target.value)}
-                placeholder="eduardosaba ou melsaba"
+                placeholder={isFamilyMode ? 'eduardosaba ou melsaba' : 'seu.email@exemplo.com'}
                 className="w-full pl-9 pr-3 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 font-medium"
               />
             </div>
@@ -225,7 +257,8 @@ export default function LoginPage() {
           </div>
         </form>
 
-        <div className="text-center text-[11px] text-slate-500 flex items-center justify-center gap-1.5">
+        {/* Footer Info */}
+        <div className="text-center text-[11px] text-slate-500 flex items-center justify-center gap-1.5 pt-1">
           <ShieldCheck className="h-3.5 w-3.5 text-emerald-400" />
           <span>Autenticação segura via Supabase Auth</span>
         </div>

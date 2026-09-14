@@ -17,10 +17,15 @@ import {
   User,
   Building2,
   Plus,
+  Mic,
+  MicOff,
+  Camera,
+  Loader2,
 } from 'lucide-react';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { Account, Category, ParsedTransaction, Transaction, TransactionType } from '@/types/finance';
 import { parseQuickInput } from '@/lib/parsers/quick-input';
+import { parseReceiptImage } from '@/lib/utils/ocr-scanner';
 import { useEntity } from '@/contexts/entity-context';
 import { useToast } from '@/contexts/toast-context';
 import { CompanyModal } from '@/components/companies/company-modal';
@@ -58,6 +63,105 @@ export function QuickTransactionInput({
   const [installmentsCount, setInstallmentsCount] = useState<number>(1);
 
   const inputRef = useRef<HTMLInputElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const recognitionRef = useRef<any>(null);
+
+  // Voice & OCR Scanner state
+  const [isListening, setIsListening] = useState(false);
+  const [isScanningOcr, setIsScanningOcr] = useState(false);
+
+  // Toggle Speech Recognition (Web Speech API)
+  const toggleListening = () => {
+    if (isListening) {
+      if (recognitionRef.current) {
+        recognitionRef.current.stop();
+      }
+      setIsListening(false);
+      return;
+    }
+
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      toast.error('Reconhecimento de voz não suportado neste navegador. Use o Chrome, Edge ou Safari.');
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.lang = 'pt-BR';
+      recognition.continuous = false;
+      recognition.interimResults = true;
+
+      recognition.onstart = () => {
+        setIsListening(true);
+        toast.info('Ouvindo... Dite seu lançamento (ex: gastei 50 reais combustível).', 'Microfone Ativo');
+      };
+
+      recognition.onresult = (event: any) => {
+        let transcript = '';
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        setInputValue(transcript);
+        if (event.results[0].isFinal) {
+          handleParse(transcript);
+        }
+      };
+
+      recognition.onerror = (event: any) => {
+        console.error('Erro de reconhecimento de voz:', event.error);
+        setIsListening(false);
+        if (event.error !== 'no-speech') {
+          toast.error(`Erro no microfone: ${event.error}`);
+        }
+      };
+
+      recognition.onend = () => {
+        setIsListening(false);
+      };
+
+      recognitionRef.current = recognition;
+      recognition.start();
+    } catch (err: any) {
+      console.error('Erro ao iniciar reconhecimento de voz:', err);
+      setIsListening(false);
+      toast.error('Não foi possível iniciar o microfone.');
+    }
+  };
+
+  // Handle Receipt Photo OCR Upload
+  const handleReceiptPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setIsScanningOcr(true);
+      toast.info('Lendo comprovante por inteligência de imagem...', 'Processando Foto');
+
+      const result = await parseReceiptImage(file);
+
+      if (result.suggestedInputText) {
+        setInputValue(result.suggestedInputText);
+        handleParse(result.suggestedInputText);
+        toast.success(
+          `Comprovante lido com sucesso! ${result.merchant ? `(${result.merchant})` : ''}`,
+          'Leitura Concluída'
+        );
+      } else {
+        toast.warning('Não foi possível ler os dados do comprovante. Tente uma foto mais nítida.');
+      }
+    } catch (err: any) {
+      console.error('Erro ao processar imagem do comprovante:', err);
+      toast.error('Falha ao ler imagem do comprovante.');
+    } finally {
+      setIsScanningOcr(false);
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+    }
+  };
 
   // Filter accounts according to active Entity Context (PF or PJ, or all if CONSOLIDATED)
   const filteredAccounts = accounts.filter((acc) => {
@@ -129,7 +233,10 @@ export function QuickTransactionInput({
     }
   };
 
+  const [isSubmitting, setIsSubmitting] = useState(false);
+
   const handleSave = async () => {
+    if (isSubmitting) return;
     if (!amount || amount <= 0) {
       toast.warning('Por favor, informe um valor maior que zero.', 'Valor Inválido');
       return;
@@ -138,6 +245,8 @@ export function QuickTransactionInput({
       toast.warning('Por favor, informe uma descrição.', 'Descrição Obrigatória');
       return;
     }
+
+    setIsSubmitting(true);
 
     const targetEntityId =
       selectedEntity === 'PJ'
@@ -173,9 +282,8 @@ export function QuickTransactionInput({
       console.error('Falha ao gravar no Supabase:', err);
       const errMsg = err?.message || 'Erro de gravação';
       toast.error(`Falha ao gravar no Supabase: ${errMsg}`, 'Erro de Salvamento');
-      if (typeof window !== 'undefined') {
-        window.alert(`Falha ao gravar no Supabase: ${errMsg}`);
-      }
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -208,11 +316,51 @@ export function QuickTransactionInput({
             }
           }}
           placeholder='Lançamento Rápido: Ex "gastei 50 reais com gasolina - nubank" ou "recebi 1500 cliente x"'
-          className="w-full pl-12 pr-28 py-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 placeholder:text-slate-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 shadow-lg transition-all"
+          className="w-full pl-12 pr-52 py-3.5 rounded-2xl bg-slate-900 border border-slate-800 text-slate-100 placeholder:text-slate-500 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 shadow-lg transition-all"
         />
 
-        {/* Action Button inside input bar */}
+        {/* Hidden Input for Receipt Photo Upload */}
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          onChange={handleReceiptPhotoUpload}
+          className="hidden"
+        />
+
+        {/* Action Buttons inside input bar */}
         <div className="absolute inset-y-1.5 right-1.5 flex items-center gap-1">
+          {/* Botão de Voz (Web Speech API) */}
+          <button
+            type="button"
+            onClick={toggleListening}
+            title={isListening ? 'Parar de ouvir' : 'Ditar lançamento por voz'}
+            className={cn(
+              'p-2 rounded-xl border text-xs font-semibold flex items-center gap-1 transition-all',
+              isListening
+                ? 'bg-rose-500/20 text-rose-400 border-rose-500/40 animate-pulse'
+                : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white hover:bg-slate-700'
+            )}
+          >
+            {isListening ? <MicOff className="h-4 w-4 text-rose-400" /> : <Mic className="h-4 w-4 text-emerald-400" />}
+          </button>
+
+          {/* Botão de Foto / OCR */}
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isScanningOcr}
+            title="Escanear Comprovante ou Cupom por Foto"
+            className="p-2 rounded-xl bg-slate-800/80 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-700 text-xs font-semibold flex items-center gap-1 transition-all disabled:opacity-50"
+          >
+            {isScanningOcr ? (
+              <Loader2 className="h-4 w-4 text-purple-400 animate-spin" />
+            ) : (
+              <Camera className="h-4 w-4 text-purple-400" />
+            )}
+          </button>
+
           {inputValue && (
             <button
               type="button"
@@ -233,7 +381,7 @@ export function QuickTransactionInput({
             className="px-3 py-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white text-xs font-semibold shadow-md flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed transition-all"
           >
             <Sparkles className="h-3.5 w-3.5" />
-            <span>Processar</span>
+            <span className="hidden sm:inline">Processar</span>
           </button>
         </div>
       </div>

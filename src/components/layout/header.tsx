@@ -21,6 +21,9 @@ import {
   Moon,
   Menu,
   X,
+  TrendingUp,
+  Landmark,
+  ShieldCheck,
 } from 'lucide-react';
 import { useEntity, EntityType } from '@/contexts/entity-context';
 import { useDateFilter, DatePeriodOption } from '@/contexts/date-filter-context';
@@ -716,8 +719,10 @@ export const NAVIGATION_ITEMS = [
   { name: 'Dashboard', href: '/', icon: BarChart3 },
   { name: 'Transações', href: '/transactions', icon: Receipt },
   { name: 'Cartões', href: '/cards', icon: CreditCard },
-  { name: 'Dívidas', href: '/debts', icon: CreditCard },
+  { name: 'Dívidas', href: '/debts', icon: Landmark },
+  { name: 'Investimentos', href: '/investments', icon: TrendingUp },
   { name: 'Orçamentos', href: '/budgets', icon: PieChart },
+  { name: 'Usuários & Licenças', href: '/settings/users', icon: ShieldCheck },
   { name: 'Configurações', href: '/settings/accounts', icon: Settings },
 ];
 

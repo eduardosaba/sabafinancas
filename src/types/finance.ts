@@ -14,10 +14,17 @@ export type InstallmentStatus = 'PENDING' | 'PAID';
 
 export type InvoiceStatus = 'OPEN' | 'CLOSED' | 'PAID';
 
+export type UserRole = 'ADMIN' | 'USER';
+export type UserStatus = 'ACTIVE' | 'BLOCKED' | 'PENDING';
+
 export interface User {
   id: string;
   email: string;
   name: string;
+  role?: UserRole;
+  status?: UserStatus;
+  mustChangePassword?: boolean;
+  licenseExpiresAt?: string | null;
   createdAt?: string;
 }
 
@@ -161,5 +168,56 @@ export interface CreditCardMetrics {
   availableLimit: number;
   limitUsagePercentage: number;
 }
+
+export type InvestmentCategory =
+  | 'RENDA_FIXA'
+  | 'ACOES'
+  | 'FIIS'
+  | 'RESERVA_EMERGENCIA'
+  | 'CRIPTO'
+  | 'OUTROS';
+
+export type InvestmentStatus = 'ACTIVE' | 'LIQUIDATED';
+
+export interface Investment {
+  id: string;
+  entityId: string; // 'PF' | 'PJ' or UUID
+  name: string;
+  category: InvestmentCategory;
+  institution: string; // ex: Inter, BTG, XP, Nubank
+  initialAmount: number;
+  currentAmount: number;
+  yieldRate?: string | null; // ex: 102% CDI, IPCA + 6%, 12% a.a.
+  startDate: string; // YYYY-MM-DD
+  status: InvestmentStatus;
+  notes?: string | null;
+  createdAt?: string;
+}
+
+export interface CreateInvestmentInput {
+  entityId: string;
+  name: string;
+  category: InvestmentCategory;
+  institution: string;
+  initialAmount: number;
+  currentAmount: number;
+  yieldRate?: string;
+  startDate: string; // YYYY-MM-DD
+  notes?: string;
+}
+
+export interface UpdateInvestmentInput {
+  entityId?: string;
+  name?: string;
+  category?: InvestmentCategory;
+  institution?: string;
+  initialAmount?: number;
+  currentAmount?: number;
+  yieldRate?: string;
+  startDate?: string;
+  status?: InvestmentStatus;
+  notes?: string;
+}
+
 
 

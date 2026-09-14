@@ -39,9 +39,8 @@ export default function RegisterPage() {
       } else {
         setSuccessMsg('Cadastro realizado com sucesso! Redirecionando...');
         setTimeout(() => {
-          router.push('/');
-          router.refresh();
-        }, 1500);
+          window.location.href = '/';
+        }, 1200);
       }
     } catch {
       setErrorMsg('Falha no sistema. Tente novamente mais tarde.');

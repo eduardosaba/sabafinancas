@@ -86,6 +86,7 @@ export function TransactionModal({
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     const parsedAmount = parseFloat(amount);
     if (isNaN(parsedAmount) || parsedAmount <= 0) return;
     if (!description.trim()) return;
@@ -131,9 +132,6 @@ export function TransactionModal({
       console.error('Error submitting transaction modal:', err);
       const errMsg = err?.message || 'Erro de gravação no Supabase';
       toast.error(`Falha ao gravar no Supabase: ${errMsg}`, 'Erro de Salvamento');
-      if (typeof window !== 'undefined') {
-        window.alert(`Falha ao gravar no Supabase: ${errMsg}`);
-      }
     } finally {
       setIsSubmitting(false);
     }

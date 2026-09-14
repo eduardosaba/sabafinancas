@@ -16,18 +16,22 @@ import {
   ArrowRight,
   DollarSign,
   Trash2,
+  Edit2,
   Calendar,
+  TrendingUp,
 } from 'lucide-react';
 import { useEntity } from '@/contexts/entity-context';
 import { Account, Debt, DebtInstallment, Transaction } from '@/types/finance';
 import {
   createDebtWithInstallments,
   deleteDebt,
+  updateDebt,
   fetchAccounts,
   fetchDebts,
   fetchTransactions,
   payDebtInstallment,
   updateTransaction,
+  migrateDebtToInvestment,
 } from '@/lib/services/finance-service';
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { cn } from '@/lib/utils';
@@ -57,6 +61,17 @@ export default function DebtsPage() {
   const [selectedAccountId, setSelectedAccountId] = useState<string>('');
   const [payDate, setPayDate] = useState(new Date().toISOString().split('T')[0]);
   const [isSubmittingPay, setIsSubmittingPay] = useState(false);
+
+  // Edit Debt modal state
+  const [editingDebt, setEditingDebt] = useState<Debt | null>(null);
+  const [editCreditor, setEditCreditor] = useState('');
+  const [editDescription, setEditDescription] = useState('');
+  const [editTotalAmount, setEditTotalAmount] = useState<string>('');
+  const [editInstallmentsCount, setEditInstallmentsCount] = useState<string>('');
+  const [editInterestRate, setEditInterestRate] = useState<string>('');
+  const [editStartDate, setEditStartDate] = useState('');
+  const [editTargetEntity, setEditTargetEntity] = useState<'PF' | 'PJ'>('PF');
+  const [isSubmittingEditDebt, setIsSubmittingEditDebt] = useState(false);
 
   // New Debt modal state
   const [showNewDebtModal, setShowNewDebtModal] = useState(false);
@@ -218,6 +233,69 @@ export default function DebtsPage() {
     setDescription('');
     toast.success(`Dívida com ${creditor} cadastrada com sucesso!`, 'Dívida Registrada');
     await loadData();
+  };
+  const handleOpenEditDebt = (debt: Debt) => {
+    setEditingDebt(debt);
+    setEditCreditor(debt.creditor);
+    setEditDescription(debt.description || '');
+    setEditTotalAmount(debt.totalAmount.toString());
+    setEditInstallmentsCount(debt.installmentsCount.toString());
+    setEditInterestRate((debt.interestRateMonthly || 0).toString());
+    setEditStartDate(debt.startDate);
+    const isPJ = debt.entityId === 'PJ' || debt.entityId === '22222222-2222-2222-2222-222222222222';
+    setEditTargetEntity(isPJ ? 'PJ' : 'PF');
+  };
+
+  const handleEditDebtSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingDebt || !editCreditor.trim() || !editTotalAmount || !editInstallmentsCount) return;
+
+    setIsSubmittingEditDebt(true);
+    try {
+      const targetEntityId = editTargetEntity === 'PJ'
+        ? '22222222-2222-2222-2222-222222222222'
+        : '11111111-1111-1111-1111-111111111111';
+
+      await updateDebt(editingDebt.id, {
+        entityId: targetEntityId,
+        creditor: editCreditor,
+        description: editDescription,
+        totalAmount: parseFloat(editTotalAmount),
+        installmentsCount: parseInt(editInstallmentsCount, 10),
+        interestRateMonthly: parseFloat(editInterestRate) || 0,
+        startDate: editStartDate,
+      });
+
+      setEditingDebt(null);
+      toast.success(`Dívida "${editCreditor}" atualizada com sucesso!`, 'Edição Concluída');
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('transactionUpdated'));
+      }
+      await loadData();
+    } finally {
+      setIsSubmittingEditDebt(false);
+    }
+  };
+
+  const handleMigrateDebt = async (debt: Debt) => {
+    const isConfirmed = await confirm({
+      title: 'Migrar para Investimentos?',
+      message: `Deseja converter o registro "${debt.creditor}" em um Investimento ativo e removê-lo da tela de dívidas?`,
+      confirmText: 'Sim, Migrar para Investimentos',
+      cancelText: 'Cancelar',
+      variant: 'primary',
+    });
+
+    if (!isConfirmed) return;
+
+    try {
+      await migrateDebtToInvestment(debt.id);
+      toast.success(`Dívida "${debt.creditor}" migrada com sucesso para o Módulo de Investimentos!`, 'Migração Concluída');
+      await loadData();
+    } catch (err: any) {
+      console.error('Error migrating debt:', err);
+      toast.error(`Falha ao migrar dívida: ${err?.message || 'Erro inesperado'}`);
+    }
   };
 
   if (!isHydrated) return null;
@@ -469,6 +547,23 @@ export default function DebtsPage() {
                     >
                       <span>{isExpanded ? 'Ocultar Grade' : 'Ver Parcelas'}</span>
                       {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                    </button>
+
+                    <button
+                      onClick={() => handleMigrateDebt(debt)}
+                      title="Migrar para Módulo de Investimentos"
+                      className="px-2.5 py-1.5 rounded-lg bg-emerald-950/60 hover:bg-emerald-900/80 text-emerald-400 border border-emerald-800/60 text-xs font-semibold flex items-center gap-1 transition-colors"
+                    >
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      <span className="hidden sm:inline">Migrar p/ Investimento</span>
+                    </button>
+
+                    <button
+                      onClick={() => handleOpenEditDebt(debt)}
+                      title="Editar Dívida / Financiamento"
+                      className="p-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-blue-400 transition-colors"
+                    >
+                      <Edit2 className="h-4 w-4" />
                     </button>
 
                     <button
@@ -735,7 +830,7 @@ export default function DebtsPage() {
                   type="number"
                   required
                   min="1"
-                  max="120"
+                  max="420"
                   value={installmentsCount}
                   onChange={(e) => setInstallmentsCount(e.target.value)}
                   className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 font-bold focus:border-blue-500"
@@ -778,6 +873,118 @@ export default function DebtsPage() {
                 className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 shadow-md"
               >
                 Gerar Dívida e Parcelas
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* Edit Debt Modal */}
+      {editingDebt && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <form
+            onSubmit={handleEditDebtSubmit}
+            className="w-full max-w-lg p-6 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl space-y-4"
+          >
+            <h3 className="text-base font-bold text-slate-100 flex items-center gap-2">
+              <Edit2 className="h-5 w-5 text-blue-400" />
+              Editar Dívida / Financiamento
+            </h3>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-300 block">Credor / Instituição</label>
+                <input
+                  type="text"
+                  required
+                  value={editCreditor}
+                  onChange={(e) => setEditCreditor(e.target.value)}
+                  placeholder="Ex: Itaú, Caixa, Fornecedor X"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-300 block">Entidade</label>
+                <select
+                  value={editTargetEntity}
+                  onChange={(e) => setEditTargetEntity(e.target.value as 'PF' | 'PJ')}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:border-blue-500"
+                >
+                  <option value="PF">Pessoa Física (PF)</option>
+                  <option value="PJ">Pessoa Jurídica (PJ)</option>
+                </select>
+              </div>
+
+              <div className="space-y-1 sm:col-span-2">
+                <label className="font-semibold text-slate-300 block">Descrição Opcional</label>
+                <input
+                  type="text"
+                  value={editDescription}
+                  onChange={(e) => setEditDescription(e.target.value)}
+                  placeholder="Ex: Financiamento de Veículo ou Máquina"
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-300 block">Valor Total Contratado (R$)</label>
+                <CurrencyInput
+                  value={editTotalAmount}
+                  onChangeValue={(num) => setEditTotalAmount(num.toString())}
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-300 block">Nº Total de Parcelas (até 420)</label>
+                <input
+                  type="number"
+                  required
+                  min="1"
+                  max="420"
+                  value={editInstallmentsCount}
+                  onChange={(e) => setEditInstallmentsCount(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 font-bold focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-300 block">Taxa Juros AM (%)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  value={editInterestRate}
+                  onChange={(e) => setEditInterestRate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:border-blue-500"
+                />
+              </div>
+
+              <div className="space-y-1">
+                <label className="font-semibold text-slate-300 block">Data do 1º Vencimento</label>
+                <input
+                  type="date"
+                  required
+                  value={editStartDate}
+                  onChange={(e) => setEditStartDate(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-slate-100 focus:border-blue-500"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingDebt(null)}
+                className="px-4 py-2 rounded-xl bg-slate-800 text-slate-300 text-xs font-semibold hover:bg-slate-700"
+              >
+                Cancelar
+              </button>
+              <button
+                type="submit"
+                disabled={isSubmittingEditDebt}
+                className="px-4 py-2 rounded-xl bg-blue-600 text-white text-xs font-bold hover:bg-blue-500 shadow-md"
+              >
+                {isSubmittingEditDebt ? 'Salvando...' : 'Salvar Alterações'}
               </button>
             </div>
           </form>

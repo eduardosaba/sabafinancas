@@ -19,15 +19,20 @@ import {
   Sparkles,
   User,
   Building2,
+  CreditCard,
+  Eye,
+  FileText,
 } from 'lucide-react';
 import { useEntity } from '@/contexts/entity-context';
 import { useDateFilter } from '@/contexts/date-filter-context';
-import { Account, Category, Transaction, TransactionType } from '@/types/finance';
+import { Account, Category, CreditCardInvoice, Transaction, TransactionType } from '@/types/finance';
 import {
   createTransaction,
   deleteTransaction,
   fetchAccounts,
   fetchCategories,
+  fetchCreditCardInvoices,
+  fetchInvoiceTransactions,
   fetchTransactions,
   fetchUsers,
   updateTransaction,
@@ -51,8 +56,18 @@ export default function TransactionsPage() {
 
   // Filters & Search
   const [searchQuery, setSearchQuery] = useState('');
-  const [selectedType, setSelectedType] = useState<'ALL' | TransactionType>('ALL');
+  const [selectedType, setSelectedType] = useState<'ALL' | TransactionType | 'INVOICE_PAYMENT'>('ALL');
   const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'PAID' | 'PENDING'>('ALL');
+  const [selectedAccountId, setSelectedAccountId] = useState<string>('ALL');
+  const [selectedAccountTypeFilter, setSelectedAccountTypeFilter] = useState<'ALL' | 'CREDIT_CARD' | 'CHECKING'>('ALL');
+
+  // Paid Invoices History in Transactions
+  const [paidInvoices, setPaidInvoices] = useState<CreditCardInvoice[]>([]);
+
+  // Viewing invoice items modal state in Transactions
+  const [viewingInvoice, setViewingInvoice] = useState<CreditCardInvoice | null>(null);
+  const [viewingInvoiceItems, setViewingInvoiceItems] = useState<Transaction[]>([]);
+  const [isLoadingInvoiceItems, setIsLoadingInvoiceItems] = useState(false);
 
   // Edit Modal State
   const [editingTx, setEditingTx] = useState<Transaction | null>(null);
@@ -75,7 +90,7 @@ export default function TransactionsPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [txs, accs, cats, usersList] = await Promise.all([
+      const [txs, accs, cats, usersList, pInvoices] = await Promise.all([
         fetchTransactions({
           entityType: entity,
           startDate: filter.startDate,
@@ -84,10 +99,48 @@ export default function TransactionsPage() {
         fetchAccounts('CONSOLIDATED'),
         fetchCategories('CONSOLIDATED'),
         fetchUsers().catch(() => []),
+        fetchCreditCardInvoices(entity, 'PAID').catch(() => []),
       ]);
       setTransactions(txs);
       setAccounts(accs);
       setCategories(cats);
+
+      // Synthesize paid invoices from both DB table and payment transfer transactions
+      const synthesizedInvoices: CreditCardInvoice[] = [...pInvoices];
+      txs.forEach((t) => {
+        const destAcc = accs.find((a) => a.id === t.destinationAccountId);
+        const sourceAcc = accs.find((a) => a.id === t.accountId);
+        const desc = t.description.toLowerCase();
+
+        const isInvoicePayment =
+          t.type === 'TRANSFER' &&
+          (desc.includes('pagamento') || desc.includes('fatura') || destAcc?.accountType === 'CREDIT_CARD');
+
+        if (isInvoicePayment) {
+          const cardAcc = destAcc?.accountType === 'CREDIT_CARD' ? destAcc : (sourceAcc?.accountType === 'CREDIT_CARD' ? sourceAcc : null);
+          const cardName = cardAcc ? cardAcc.name : 'Cartão de Crédito';
+
+          const alreadyExists = synthesizedInvoices.some(
+            (inv) => inv.accountId === (t.destinationAccountId || t.accountId) && Math.abs(inv.totalAmount - t.amount) < 0.01
+          );
+
+          if (!alreadyExists) {
+            synthesizedInvoices.push({
+              id: `synth-${t.id}`,
+              accountId: t.destinationAccountId || t.accountId,
+              accountName: cardName,
+              dueDate: t.transactionDate,
+              closingDate: t.transactionDate,
+              referenceMonth: t.transactionDate.substring(0, 7),
+              totalAmount: t.amount,
+              status: 'PAID',
+              createdAt: t.createdAt,
+            });
+          }
+        }
+      });
+
+      setPaidInvoices(synthesizedInvoices);
 
       const uMap: Record<string, string> = {};
       usersList.forEach((u) => {
@@ -129,26 +182,88 @@ export default function TransactionsPage() {
     }
   };
 
+  // Handle View Invoice Items Modal
+  const handleViewInvoiceItems = async (inv: CreditCardInvoice) => {
+    setViewingInvoice(inv);
+    setIsLoadingInvoiceItems(true);
+    try {
+      let items: Transaction[] = [];
+      if (inv.id.startsWith('synth-')) {
+        items = transactions.filter(
+          (t) => (t.accountId === inv.accountId || t.destinationAccountId === inv.accountId) && t.type !== 'TRANSFER'
+        );
+      } else {
+        items = await fetchInvoiceTransactions(inv.id);
+      }
+      setViewingInvoiceItems(items);
+    } catch (err) {
+      console.error('Error fetching invoice items:', err);
+      toast.error('Erro ao carregar itens da fatura.');
+    } finally {
+      setIsLoadingInvoiceItems(false);
+    }
+  };
+
   // Filtered transactions list
   const filteredTransactions = useMemo(() => {
     return transactions.filter((tx) => {
+      const sourceAcc = accounts.find((a) => a.id === tx.accountId);
+      const destAcc = tx.destinationAccountId ? accounts.find((a) => a.id === tx.destinationAccountId) : null;
+      const desc = tx.description.toLowerCase();
+
       // Filter by type
-      if (selectedType !== 'ALL' && tx.type !== selectedType) {
+      if (selectedType === 'INVOICE_PAYMENT') {
+        const isInvoicePaymentTransfer =
+          (tx.type === 'TRANSFER' && (desc.includes('pagamento') || desc.includes('fatura') || destAcc?.accountType === 'CREDIT_CARD')) ||
+          (sourceAcc?.accountType === 'CHECKING' && destAcc?.accountType === 'CREDIT_CARD');
+        const isLinkedToInvoice = !!tx.invoiceId;
+        const isPaidCreditCardTx = (sourceAcc?.accountType === 'CREDIT_CARD' || destAcc?.accountType === 'CREDIT_CARD') && tx.status === 'PAID';
+
+        if (!isInvoicePaymentTransfer && !isLinkedToInvoice && !isPaidCreditCardTx) {
+          return false;
+        }
+      } else if (selectedType !== 'ALL' && tx.type !== selectedType) {
         return false;
       }
+
+      // Filter by account type category (Todas, Cartões de Crédito, Contas Correntes)
+      if (selectedType !== 'INVOICE_PAYMENT' && selectedAccountTypeFilter === 'CREDIT_CARD') {
+        if (sourceAcc?.accountType !== 'CREDIT_CARD' && destAcc?.accountType !== 'CREDIT_CARD') {
+          return false;
+        }
+      } else if (selectedType !== 'INVOICE_PAYMENT' && selectedAccountTypeFilter === 'CHECKING') {
+        if (sourceAcc?.accountType === 'CREDIT_CARD' && destAcc?.accountType === 'CREDIT_CARD') {
+          return false;
+        }
+      }
+
       // Filter by status
       if (selectedStatus !== 'ALL' && tx.status !== selectedStatus) {
         return false;
       }
+
+      // Filter by specific account
+      if (selectedAccountId === 'CREDIT_CARDS_ONLY') {
+        if (sourceAcc?.accountType !== 'CREDIT_CARD' && destAcc?.accountType !== 'CREDIT_CARD') {
+          return false;
+        }
+      } else if (selectedAccountId !== 'ALL') {
+        if (tx.accountId !== selectedAccountId && tx.destinationAccountId !== selectedAccountId) {
+          return false;
+        }
+      }
+
       // Filter by search query
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase();
-        const acc = accounts.find((a) => a.id === tx.accountId);
         const cat = categories.find((c) => c.id === tx.categoryId);
 
         const matchDesc = tx.description.toLowerCase().includes(q);
-        const matchAcc = acc?.name.toLowerCase().includes(q);
+        const matchAcc = sourceAcc?.name.toLowerCase().includes(q) || (destAcc && destAcc.name.toLowerCase().includes(q));
         const matchCat = cat?.name.toLowerCase().includes(q);
+        const matchCardKeyword =
+          (q.includes('cartao') || q.includes('cartão') || q.includes('fatura')) &&
+          (sourceAcc?.accountType === 'CREDIT_CARD' || destAcc?.accountType === 'CREDIT_CARD' || !!tx.invoiceId);
 
         const amountNumStr = tx.amount.toString();
         const amountBrlStr = tx.amount.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
@@ -159,13 +274,13 @@ export default function TransactionsPage() {
           amountBrlStr.toLowerCase().includes(cleanQ) ||
           amountBrlStr.replace('.', '').replace(',', '.').includes(cleanQ);
 
-        if (!matchDesc && !matchAcc && !matchCat && !matchAmount) {
+        if (!matchDesc && !matchAcc && !matchCat && !matchAmount && !matchCardKeyword) {
           return false;
         }
       }
       return true;
     });
-  }, [transactions, selectedType, selectedStatus, searchQuery, accounts, categories]);
+  }, [transactions, selectedType, selectedAccountTypeFilter, selectedStatus, selectedAccountId, searchQuery, accounts, categories]);
 
   // Handle Edit Open
   const handleOpenEdit = (tx: Transaction) => {
@@ -299,16 +414,15 @@ export default function TransactionsPage() {
       </div>
 
       {/* Filter and Search Controls */}
-      <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl flex flex-col xl:flex-row items-stretch xl:items-center justify-between gap-4">
+      <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
         
-        {/* Type & Status Selector Tabs */}
-        <div className="flex flex-wrap items-center gap-2 max-w-full overflow-x-auto pb-1">
-          {/* Type Tabs */}
-          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 flex-shrink-0">
+        {/* Row 1: Main Type Tabs */}
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-800 pb-3">
+          <div className="flex flex-wrap items-center gap-1.5 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
             <button
               onClick={() => setSelectedType('ALL')}
               className={cn(
-                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                'px-3 py-1.5 rounded-lg transition-all',
                 selectedType === 'ALL'
                   ? 'bg-slate-800 text-slate-100 shadow-sm border border-slate-700'
                   : 'text-slate-400 hover:text-slate-200'
@@ -320,9 +434,9 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedType('EXPENSE')}
               className={cn(
-                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5',
                 selectedType === 'EXPENSE'
-                  ? 'bg-rose-950 text-rose-300 border border-rose-500/40 shadow-sm'
+                  ? 'bg-rose-950 text-rose-300 border border-rose-500/40 shadow-sm font-bold'
                   : 'text-slate-400 hover:text-rose-400'
               )}
             >
@@ -333,9 +447,9 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedType('INCOME')}
               className={cn(
-                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5',
                 selectedType === 'INCOME'
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40 shadow-sm font-bold'
                   : 'text-slate-400 hover:text-emerald-400'
               )}
             >
@@ -346,23 +460,36 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedType('TRANSFER')}
               className={cn(
-                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5',
                 selectedType === 'TRANSFER'
-                  ? 'bg-purple-950 text-purple-300 border border-purple-500/40 shadow-sm'
+                  ? 'bg-purple-950 text-purple-300 border border-purple-500/40 shadow-sm font-bold'
                   : 'text-slate-400 hover:text-purple-400'
               )}
             >
               <ArrowLeftRight className="h-3.5 w-3.5" />
               <span>Transferências</span>
             </button>
+
+            <button
+              onClick={() => setSelectedType('INVOICE_PAYMENT')}
+              className={cn(
+                'px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5',
+                selectedType === 'INVOICE_PAYMENT'
+                  ? 'bg-blue-950 text-blue-300 border border-blue-500/40 shadow-sm font-bold'
+                  : 'text-slate-400 hover:text-blue-400'
+              )}
+            >
+              <CreditCard className="h-3.5 w-3.5 text-blue-400" />
+              <span>Faturas Pagas (Cartão)</span>
+            </button>
           </div>
 
           {/* Status Tabs */}
-          <div className="flex rounded-xl bg-slate-950 p-1 border border-slate-800 flex-shrink-0">
+          <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
             <button
               onClick={() => setSelectedStatus('ALL')}
               className={cn(
-                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all',
+                'px-3 py-1.5 rounded-lg transition-all',
                 selectedStatus === 'ALL'
                   ? 'bg-slate-800 text-slate-100 shadow-sm border border-slate-700'
                   : 'text-slate-400 hover:text-slate-200'
@@ -373,9 +500,9 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedStatus('PAID')}
               className={cn(
-                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-3 py-1.5 rounded-lg transition-all flex items-center gap-1',
                 selectedStatus === 'PAID'
-                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40 shadow-sm'
+                  ? 'bg-emerald-950 text-emerald-300 border border-emerald-500/40 shadow-sm font-bold'
                   : 'text-slate-400 hover:text-emerald-400'
               )}
             >
@@ -385,31 +512,237 @@ export default function TransactionsPage() {
             <button
               onClick={() => setSelectedStatus('PENDING')}
               className={cn(
-                'px-2.5 sm:px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1',
+                'px-3 py-1.5 rounded-lg transition-all flex items-center gap-1',
                 selectedStatus === 'PENDING'
-                  ? 'bg-amber-950 text-amber-300 border border-amber-500/40 shadow-sm'
+                  ? 'bg-amber-950 text-amber-300 border border-amber-500/40 shadow-sm font-bold'
                   : 'text-slate-400 hover:text-amber-400'
               )}
             >
               <Clock className="h-3.5 w-3.5" />
-              <span>A Vencer ({transactions.filter((t) => t.status === 'PENDING').length})</span>
+              <span>A Vencer</span>
             </button>
           </div>
         </div>
 
-        {/* Search Bar */}
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Buscar por descrição, valor (R$), conta ou categoria..."
-            className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 font-medium"
-          />
-        </div>
+        {/* Row 2: Search Bar & Account Filters */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+          
+          {/* Search Bar */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-500" />
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Buscar por descrição, valor (R$), conta, cartão ou categoria..."
+              className="w-full pl-9 pr-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 text-xs focus:outline-none focus:border-emerald-500 font-medium"
+            />
+          </div>
 
+          {/* Account Category Filter (Todas, Cartões de Crédito, Contas Bancárias) */}
+          <div className="flex items-center gap-2">
+            <select
+              value={selectedAccountTypeFilter}
+              onChange={(e) => {
+                const val = e.target.value as any;
+                setSelectedAccountTypeFilter(val);
+                if (val === 'CREDIT_CARD') setSelectedAccountId('CREDIT_CARDS_ONLY');
+                else if (selectedAccountId === 'CREDIT_CARDS_ONLY') setSelectedAccountId('ALL');
+              }}
+              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs font-semibold focus:outline-none focus:border-emerald-500 cursor-pointer"
+            >
+              <option value="ALL">Todas Categorias de Conta</option>
+              <option value="CREDIT_CARD">💳 Apenas Cartões de Crédito</option>
+              <option value="CHECKING">🏦 Apenas Contas Bancárias</option>
+            </select>
+
+            {/* Specific Account Filter */}
+            <select
+              value={selectedAccountId}
+              onChange={(e) => setSelectedAccountId(e.target.value)}
+              className="px-3 py-2 rounded-xl bg-slate-950 border border-slate-800 text-slate-200 text-xs font-semibold focus:outline-none focus:border-emerald-500 cursor-pointer max-w-[220px]"
+            >
+              <option value="ALL">Selecione uma Conta / Cartão...</option>
+              <option value="CREDIT_CARDS_ONLY">💳 Todos os Cartões de Crédito</option>
+              <optgroup label="Contas / Cartões Cadastrados">
+                {accounts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.accountType === 'CREDIT_CARD' ? '💳 ' : '🏦 '}
+                    {a.name} ({a.accountType === 'CREDIT_CARD' ? 'Cartão' : 'Conta'})
+                  </option>
+                ))}
+              </optgroup>
+            </select>
+          </div>
+
+        </div>
       </div>
+
+      {/* Section: Faturas de Cartão Pagas (Shown when 'INVOICE_PAYMENT' or 'ALL' or 'CREDIT_CARD' is active) */}
+      {(selectedType === 'INVOICE_PAYMENT' || paidInvoices.length > 0) && (
+        <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
+          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+            <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
+              <CreditCard className="h-4 w-4 text-blue-400" />
+              <span>Faturas de Cartão Quitadas ({paidInvoices.length})</span>
+            </h3>
+            <span className="text-[11px] text-slate-400">
+              Histórico de liquidação de faturas consolidadas
+            </span>
+          </div>
+
+          {paidInvoices.length === 0 ? (
+            <div className="py-6 text-center text-slate-500 text-xs italic bg-slate-950/40 rounded-xl border border-slate-800/80 p-3">
+              Nenhuma fatura de cartão paga registrada até o momento.
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {paidInvoices.map((inv) => (
+                <div
+                  key={inv.id}
+                  className="p-3.5 rounded-xl bg-slate-950/80 border border-slate-800 text-xs space-y-2 flex flex-col justify-between hover:border-blue-500/40 transition-colors"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="font-bold text-slate-100 truncate">
+                        {inv.accountName || 'Cartão de Crédito'}
+                      </div>
+                      <div className="text-[11px] text-blue-400 font-mono">
+                        Fatura Ref: {inv.referenceMonth}
+                      </div>
+                    </div>
+                    <span className="px-2 py-0.5 rounded text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800 uppercase">
+                      Quitada
+                    </span>
+                  </div>
+
+                  <div className="flex items-end justify-between pt-2 border-t border-slate-800/80">
+                    <div>
+                      <div className="text-[10px] text-slate-400">Vencimento:</div>
+                      <div className="text-xs text-slate-300 font-mono">
+                        {inv.dueDate.split('-').reverse().join('/')}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="text-sm font-extrabold text-emerald-400 font-mono">
+                        {inv.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => handleViewInvoiceItems(inv)}
+                        className="mt-1 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[10px] font-semibold transition-colors inline-flex items-center gap-1 border border-slate-700"
+                      >
+                        <Eye className="h-3 w-3 text-blue-400" />
+                        <span>Ver Itens</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Invoice Details Modal in Transactions Page */}
+      {viewingInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl p-6 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-950 border border-blue-800 text-blue-400">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-100 flex items-center gap-2">
+                    <span>Lançamentos da Fatura ({viewingInvoice.referenceMonth})</span>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full uppercase bg-emerald-950 text-emerald-400 border border-emerald-800">
+                      Quitada
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {viewingInvoice.accountName || 'Cartão de Crédito'} | Vencimento: {viewingInvoice.dueDate.split('-').reverse().join('/')}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setViewingInvoice(null);
+                  setViewingInvoiceItems([]);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Total Summary */}
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs flex-shrink-0">
+              <span className="text-slate-400 font-semibold">Valor Total Pago:</span>
+              <strong className="text-lg font-mono font-extrabold text-emerald-400">
+                {viewingInvoice.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </strong>
+            </div>
+
+            {/* Items List */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 min-h-0">
+              {isLoadingInvoiceItems ? (
+                <div className="py-8 flex items-center justify-center gap-2 text-slate-400 text-xs">
+                  <Clock className="h-4 w-4 animate-spin text-blue-400" />
+                  <span>Carregando itens da fatura...</span>
+                </div>
+              ) : viewingInvoiceItems.length === 0 ? (
+                <div className="py-8 text-center text-slate-500 text-xs italic bg-slate-950/40 rounded-xl border border-slate-800/80 p-4">
+                  Nenhum lançamento individual encontrado para esta fatura.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {viewingInvoiceItems.map((item) => {
+                    const cat = categories.find((c) => c.id === item.categoryId);
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs flex items-center justify-between gap-3"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-slate-100 truncate">{item.description}</div>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono mt-0.5">
+                            <span>{item.transactionDate.split('-').reverse().join('/')}</span>
+                            {cat && <span className="text-slate-400 font-sans">| {cat.name}</span>}
+                          </div>
+                        </div>
+
+                        <div className="text-right font-mono font-bold text-sm text-slate-100">
+                          {item.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-800 flex justify-end flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewingInvoice(null);
+                  setViewingInvoiceItems([]);
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+              >
+                Fechar
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
 
       {/* Transactions Table Card */}
       <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
@@ -441,52 +774,90 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-800/60">
-                {filteredTransactions.map((tx) => {
-                  const account = accounts.find((a) => a.id === tx.accountId);
-                  const destAccount = tx.destinationAccountId
-                    ? accounts.find((a) => a.id === tx.destinationAccountId)
-                    : null;
-                  const category = categories.find((c) => c.id === tx.categoryId);
-                  const isIncome = tx.type === 'INCOME';
-                  const isTransfer = tx.type === 'TRANSFER';
-                  const todayStr = new Date().toISOString().split('T')[0];
-                  const isOverdue = tx.status === 'PENDING' && tx.transactionDate < todayStr;
+                  {filteredTransactions.map((tx) => {
+                    const account = accounts.find((a) => a.id === tx.accountId);
+                    const destAccount = tx.destinationAccountId
+                      ? accounts.find((a) => a.id === tx.destinationAccountId)
+                      : null;
+                    const category = categories.find((c) => c.id === tx.categoryId);
+                    const isIncome = tx.type === 'INCOME';
+                    const isTransfer = tx.type === 'TRANSFER';
+                    const desc = tx.description.toLowerCase();
+                    const isInvoicePayment =
+                      (isTransfer && (desc.includes('pagamento') || desc.includes('fatura') || destAccount?.accountType === 'CREDIT_CARD')) ||
+                      (account?.accountType === 'CHECKING' && destAccount?.accountType === 'CREDIT_CARD');
 
-                  return (
-                    <tr key={tx.id} className="hover:bg-slate-800/40 transition-colors group">
-                      {/* Type Badge */}
-                      <td className="px-4 py-3 font-semibold">
-                        <span
-                          className={cn(
-                            'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold',
-                            isIncome && 'bg-emerald-950 text-emerald-400 border border-emerald-500/30',
-                            !isIncome && !isTransfer && 'bg-rose-950 text-rose-400 border border-rose-500/30',
-                            isTransfer && 'bg-purple-950 text-purple-300 border border-purple-500/30'
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const isOverdue = tx.status === 'PENDING' && tx.transactionDate < todayStr;
+
+                    return (
+                      <tr key={tx.id} className="hover:bg-slate-800/40 transition-colors group">
+                        {/* Type Badge */}
+                        <td className="px-4 py-3 font-semibold">
+                          {isInvoicePayment ? (
+                            <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-blue-950 text-blue-300 border border-blue-500/40 shadow-sm">
+                              <CreditCard className="h-3 w-3 text-blue-400" />
+                              Cartão de Crédito
+                            </span>
+                          ) : (
+                            <span
+                              className={cn(
+                                'inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[10px] font-bold',
+                                isIncome && 'bg-emerald-950 text-emerald-400 border border-emerald-500/30',
+                                !isIncome && !isTransfer && 'bg-rose-950 text-rose-400 border border-rose-500/30',
+                                isTransfer && 'bg-purple-950 text-purple-300 border border-purple-500/30'
+                              )}
+                            >
+                              {isIncome && <ArrowUpRight className="h-3 w-3" />}
+                              {!isIncome && !isTransfer && <ArrowDownRight className="h-3 w-3" />}
+                              {isTransfer && <ArrowLeftRight className="h-3 w-3" />}
+                              {isIncome ? 'Receita' : isTransfer ? 'Transferência' : 'Despesa'}
+                            </span>
                           )}
-                        >
-                          {isIncome && <ArrowUpRight className="h-3 w-3" />}
-                          {!isIncome && !isTransfer && <ArrowDownRight className="h-3 w-3" />}
-                          {isTransfer && <ArrowLeftRight className="h-3 w-3" />}
-                          {isIncome ? 'Receita' : isTransfer ? 'Transferência' : 'Despesa'}
-                        </span>
-                      </td>
+                        </td>
 
                       {/* Description */}
                       <td className="px-4 py-3 font-semibold text-slate-100">
-                        {tx.description}
-                        {tx.debtInstallmentId && (
-                          <span className="ml-2 inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-950 text-purple-300 border border-purple-800/50">
-                            Dívida/Parcela
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{tx.description}</span>
+                          {tx.debtInstallmentId && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono bg-purple-950 text-purple-300 border border-purple-800/50">
+                              Dívida/Parcela
+                            </span>
+                          )}
+                          {tx.invoiceId && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono bg-blue-950 text-blue-300 border border-blue-800/50">
+                              [Fatura]
+                            </span>
+                          )}
+                          {(tx.description.toLowerCase().includes('pagamento de fatura') ||
+                            (isTransfer && destAccount?.accountType === 'CREDIT_CARD')) && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-mono bg-emerald-950 text-emerald-300 border border-emerald-800/50">
+                              [Pgto Fatura]
+                            </span>
+                          )}
+                        </div>
                       </td>
 
                       {/* Account / Destination Account */}
                       <td className="px-4 py-3 text-slate-300">
-                        {account?.name || 'Conta Bancária'}
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{account?.name || 'Conta Bancária'}</span>
+                          {account?.accountType === 'CREDIT_CARD' && (
+                            <span className="inline-flex items-center gap-0.5 px-1.5 py-0.2 rounded text-[9px] font-bold bg-blue-950 text-blue-300 border border-blue-800/60">
+                              <CreditCard className="h-2.5 w-2.5 text-blue-400" />
+                              Cartão
+                            </span>
+                          )}
+                        </div>
                         {isTransfer && destAccount && (
-                          <span className="text-purple-400 text-[11px] block">
+                          <span className="text-purple-400 text-[11px] block mt-0.5">
                             → {destAccount.name}
+                            {destAccount.accountType === 'CREDIT_CARD' && (
+                              <span className="ml-1 inline-flex items-center gap-0.5 px-1 py-0.2 rounded text-[9px] font-bold bg-blue-950 text-blue-300 border border-blue-800/60">
+                                Cartão
+                              </span>
+                            )}
                           </span>
                         )}
                       </td>

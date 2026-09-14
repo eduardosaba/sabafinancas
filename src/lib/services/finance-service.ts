@@ -14,6 +14,10 @@ import {
   Transaction,
   TransactionNature,
   TransactionType,
+  Investment,
+  InvestmentCategory,
+  CreateInvestmentInput,
+  UpdateInvestmentInput,
 } from '@/types/finance';
 import { SEED_CATEGORIES } from '@/lib/supabase/seed';
 import { addMonthsToISO, calculateCreditCardDueDate } from '@/lib/utils/credit-card';
@@ -41,6 +45,16 @@ export interface CreateDebtInput {
   interestRateMonthly?: number;
   installmentsCount: number;
   startDate: string; // YYYY-MM-DD
+}
+
+export interface UpdateDebtInput {
+  entityId?: string;
+  creditor?: string;
+  description?: string;
+  totalAmount?: number;
+  interestRateMonthly?: number;
+  installmentsCount?: number;
+  startDate?: string; // YYYY-MM-DD
 }
 
 export interface CreateTransferInput {
@@ -878,21 +892,24 @@ export async function closeInvoice(input: {
 }
 
 /**
- * Busca faturas fechadas com status 'CLOSED'
+ * Busca faturas de cartão por status ('CLOSED', 'PAID', ou 'ALL')
  */
-export async function fetchClosedInvoices(entityType?: string): Promise<CreditCardInvoice[]> {
+export async function fetchCreditCardInvoices(
+  entityType?: string,
+  status: InvoiceStatus | 'ALL' = 'ALL'
+): Promise<CreditCardInvoice[]> {
   const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
-    const res = await supabase
-      .from('credit_card_invoices')
-      .select('*, accounts(*)')
-      .eq('status', 'CLOSED')
-      .order('due_date', { ascending: true });
-    return res;
+    let query = supabase.from('credit_card_invoices').select('*, accounts(*)');
+    if (status !== 'ALL') {
+      query = query.eq('status', status);
+    }
+    query = query.order('due_date', { ascending: false });
+    return await query;
   });
 
   if (error || !data) {
     if (error && !error.message?.includes('does not exist')) {
-      console.error('Erro ao carregar faturas fechadas:', error);
+      console.error('Erro ao carregar faturas:', error);
     }
     return [];
   }
@@ -927,6 +944,49 @@ export async function fetchClosedInvoices(entityType?: string): Promise<CreditCa
     if (entityType === 'PJ' && (acc.entityId === '22222222-2222-2222-2222-222222222222' || acc.entityId === 'PJ')) return true;
     return false;
   });
+}
+
+/**
+ * Busca faturas fechadas com status 'CLOSED'
+ */
+export async function fetchClosedInvoices(entityType?: string): Promise<CreditCardInvoice[]> {
+  return fetchCreditCardInvoices(entityType, 'CLOSED');
+}
+
+/**
+ * Busca lançamentos vinculados a uma fatura específica
+ */
+export async function fetchInvoiceTransactions(invoiceId: string): Promise<Transaction[]> {
+  const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
+    const res = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('invoice_id', invoiceId)
+      .order('transaction_date', { ascending: false });
+    return res;
+  });
+
+  if (error || !data) {
+    if (error) console.error('Erro ao carregar lançamentos da fatura:', error);
+    return [];
+  }
+
+  return data.map((item: any) => ({
+    id: item.id,
+    userId: item.user_id,
+    entityId: item.entity_id,
+    accountId: item.account_id,
+    destinationAccountId: item.destination_account_id,
+    categoryId: item.category_id,
+    debtInstallmentId: item.debt_installment_id,
+    invoiceId: item.invoice_id,
+    type: item.type,
+    amount: Number(item.amount),
+    transactionDate: item.transaction_date,
+    description: item.description,
+    status: item.status,
+    createdAt: item.created_at,
+  }));
 }
 
 export async function payCreditCardInvoice(
@@ -1501,8 +1561,415 @@ export async function deleteDebt(debtId: string): Promise<boolean> {
   return true;
 }
 
+export async function updateDebt(debtId: string, input: UpdateDebtInput): Promise<boolean> {
+  const supabase = createClient();
+
+  // 1. Buscar a dívida e suas parcelas existentes
+  const { data: dbDebt, error: fetchErr } = await supabase
+    .from('debts')
+    .select('*, debt_installments(*)')
+    .eq('id', debtId)
+    .single();
+
+  if (fetchErr || !dbDebt) {
+    console.error('Erro ao buscar dívida para edição:', fetchErr);
+    throw new Error(`Dívida não encontrada no Supabase: ${fetchErr?.message}`);
+  }
+
+  const currentCount = dbDebt.installments_count;
+  const newCount = input.installmentsCount || currentCount;
+  const newTotalAmount = input.totalAmount !== undefined ? input.totalAmount : Number(dbDebt.total_amount);
+  const newStartDateStr = input.startDate || dbDebt.start_date;
+  const newStartDate = new Date(newStartDateStr);
+
+  let dbEntityId = input.entityId;
+  if (dbEntityId && !isValidUUID(dbEntityId)) {
+    dbEntityId = dbEntityId === 'PJ' ? '22222222-2222-2222-2222-222222222222' : '11111111-1111-1111-1111-111111111111';
+  }
+
+  // Atualiza registro principal na tabela debts
+  const updateData: any = {};
+  if (input.creditor) updateData.creditor = input.creditor;
+  if (input.description !== undefined) updateData.description = input.description;
+  if (input.totalAmount !== undefined) updateData.total_amount = newTotalAmount;
+  if (input.interestRateMonthly !== undefined) updateData.interest_rate_monthly = input.interestRateMonthly;
+  if (input.installmentsCount !== undefined) updateData.installments_count = newCount;
+  if (input.startDate) updateData.start_date = newStartDateStr;
+  if (dbEntityId) updateData.entity_id = dbEntityId;
+
+  const { error: updateErr } = await supabase
+    .from('debts')
+    .update(updateData)
+    .eq('id', debtId);
+
+  if (updateErr) {
+    console.error('Erro ao atualizar registro da dívida:', updateErr);
+    throw new Error(`Falha ao atualizar dívida no Supabase: ${updateErr.message}`);
+  }
+
+  // 2. Ajuste das parcelas em debt_installments
+  const existingInsts: any[] = (dbDebt.debt_installments || []).sort(
+    (a: any, b: any) => a.installment_number - b.installment_number
+  );
+
+  const newInstallmentAmount = Math.round((newTotalAmount / newCount) * 100) / 100;
+
+  // Atualiza parcelas existentes
+  for (const inst of existingInsts) {
+    if (inst.installment_number <= newCount) {
+      if (inst.status === 'PENDING') {
+        const i = inst.installment_number - 1;
+        const newDueDate = new Date(newStartDate.getFullYear(), newStartDate.getMonth() + i, newStartDate.getDate());
+        await supabase
+          .from('debt_installments')
+          .update({
+            amount: newInstallmentAmount,
+            due_date: newDueDate.toISOString().split('T')[0],
+          })
+          .eq('id', inst.id);
+      }
+    } else {
+      // Se a nova quantidade de parcelas for menor, exclui as parcelas pendentes excedentes
+      if (inst.status === 'PENDING') {
+        await supabase.from('debt_installments').delete().eq('id', inst.id);
+      }
+    }
+  }
+
+  // Se a nova quantidade de parcelas for maior do que as parcelas existentes, gera as parcelas faltantes
+  const maxInstNum = existingInsts.length > 0 ? Math.max(...existingInsts.map((i: any) => i.installment_number)) : 0;
+  if (newCount > maxInstNum) {
+    const newDbInsts = [];
+    for (let i = maxInstNum; i < newCount; i++) {
+      const dueDate = new Date(newStartDate.getFullYear(), newStartDate.getMonth() + i, newStartDate.getDate());
+      newDbInsts.push({
+        debt_id: debtId,
+        installment_number: i + 1,
+        amount: newInstallmentAmount,
+        due_date: dueDate.toISOString().split('T')[0],
+        status: 'PENDING',
+      });
+    }
+
+    if (newDbInsts.length > 0) {
+      const { error: insertErr } = await supabase.from('debt_installments').insert(newDbInsts);
+      if (insertErr) {
+        console.error('Erro ao gerar parcelas adicionais da dívida:', insertErr);
+        throw new Error(`Falha ao cadastrar parcelas adicionais no Supabase: ${insertErr.message}`);
+      }
+    }
+  }
+
+  return true;
+}
+
 export async function fetchUsers(): Promise<{ id: string; name: string; email: string }[]> {
   const supabase = createClient();
   const { data } = await supabase.from('users').select('id, name, email');
   return data || [];
 }
+
+function isMissingTableError(error: any): boolean {
+  if (!error) return false;
+  const msg = (error.message || '').toLowerCase();
+  const code = (error.code || '').toUpperCase();
+  return (
+    msg.includes('schema cache') ||
+    msg.includes('does not exist') ||
+    msg.includes('not find') ||
+    msg.includes('could not find') ||
+    code === 'PGRST205' ||
+    code === '42P01'
+  );
+}
+
+/**
+  * Busca lista de investimentos cadastrados filtrados por entidade (PF, PJ ou Consolidado)
+  */
+export async function fetchInvestments(entityType?: string): Promise<Investment[]> {
+  const { data, error } = await execWithJwtRetry<any[]>(async (supabase) => {
+    let query = supabase.from('investments').select('*').order('created_at', { ascending: false });
+
+    if (entityType && entityType !== 'CONSOLIDATED') {
+      if (entityType === 'PF') {
+        query = query.or('entity_id.eq.PF,entity_id.eq.11111111-1111-1111-1111-111111111111');
+      } else if (entityType === 'PJ') {
+        query = query.or('entity_id.eq.PJ,entity_id.not.in.(11111111-1111-1111-1111-111111111111,PF)');
+      } else {
+        query = query.eq('entity_id', entityType);
+      }
+    }
+
+    return await query;
+  });
+
+  if (error || !data) {
+    if (error && !isMissingTableError(error)) {
+      console.error('Erro ao buscar investimentos do Supabase:', error);
+    }
+    // Fallback gracioso: buscar contas do tipo INVESTMENT se a tabela investments não existir ainda
+    const accounts = await fetchAccounts(entityType);
+    const investmentAccounts = accounts.filter((a) => a.accountType === 'INVESTMENT');
+
+    return investmentAccounts.map((acc) => ({
+      id: acc.id,
+      entityId: acc.entityId,
+      name: acc.name,
+      category: 'RENDA_FIXA',
+      institution: acc.name.split(' ')[0] || 'Instituição',
+      initialAmount: acc.initialBalance || 0,
+      currentAmount: acc.currentBalance || 0,
+      yieldRate: '100% CDI',
+      startDate: new Date().toISOString().split('T')[0],
+      status: 'ACTIVE',
+      createdAt: acc.createdAt,
+    }));
+  }
+
+  return data.map((item: any) => ({
+    id: item.id,
+    entityId: item.entity_id,
+    name: item.name,
+    category: item.category || 'RENDA_FIXA',
+    institution: item.institution || 'Instituição',
+    initialAmount: Number(item.initial_amount || item.initial_balance || 0),
+    currentAmount: Number(item.current_amount || item.current_balance || 0),
+    yieldRate: item.yield_rate || null,
+    startDate: item.start_date || item.created_at?.split('T')[0] || new Date().toISOString().split('T')[0],
+    status: item.status || 'ACTIVE',
+    notes: item.notes || null,
+    createdAt: item.created_at,
+  }));
+}
+
+/**
+ * Cria um novo investimento no Supabase
+ */
+export async function createInvestment(input: CreateInvestmentInput): Promise<Investment | null> {
+  const supabase = createClient();
+  const { data: authData } = await supabase.auth.getUser();
+  const userId = authData?.user?.id;
+
+  let dbEntityId = input.entityId;
+  if (dbEntityId && !isValidUUID(dbEntityId)) {
+    dbEntityId = dbEntityId === 'PJ' ? '22222222-2222-2222-2222-222222222222' : '11111111-1111-1111-1111-111111111111';
+  }
+
+  const payload = {
+    user_id: userId,
+    entity_id: dbEntityId,
+    name: input.name,
+    category: input.category,
+    institution: input.institution,
+    initial_amount: input.initialAmount,
+    current_amount: input.currentAmount,
+    yield_rate: input.yieldRate || null,
+    start_date: input.startDate,
+    status: 'ACTIVE',
+    notes: input.notes || null,
+  };
+
+  const { data, error } = await supabase.from('investments').insert([payload]).select().single();
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      const acc = await createAccount({
+        entityId: dbEntityId,
+        name: `${input.name} (${input.institution})`,
+        accountType: 'INVESTMENT',
+        initialBalance: input.initialAmount,
+        colorHex: '#10b981',
+      });
+      if (acc) {
+        return {
+          id: acc.id,
+          entityId: acc.entityId,
+          name: input.name,
+          category: input.category,
+          institution: input.institution,
+          initialAmount: input.initialAmount,
+          currentAmount: input.currentAmount,
+          yieldRate: input.yieldRate,
+          startDate: input.startDate,
+          status: 'ACTIVE',
+          notes: input.notes,
+        };
+      }
+    }
+    console.error('Erro ao cadastrar investimento no Supabase:', error);
+    throw new Error(`Falha ao cadastrar investimento: ${error.message}`);
+  }
+
+  return {
+    id: data.id,
+    entityId: data.entity_id,
+    name: data.name,
+    category: data.category,
+    institution: data.institution,
+    initialAmount: Number(data.initial_amount),
+    currentAmount: Number(data.current_amount),
+    yieldRate: data.yield_rate,
+    startDate: data.start_date,
+    status: data.status,
+    notes: data.notes,
+    createdAt: data.created_at,
+  };
+}
+
+/**
+ * Atualiza os dados de um investimento existente
+ */
+export async function updateInvestment(id: string, input: UpdateInvestmentInput): Promise<boolean> {
+  const supabase = createClient();
+
+  let dbEntityId = input.entityId;
+  if (dbEntityId && !isValidUUID(dbEntityId)) {
+    dbEntityId = dbEntityId === 'PJ' ? '22222222-2222-2222-2222-222222222222' : '11111111-1111-1111-1111-111111111111';
+  }
+
+  const updateData: any = {};
+  if (input.name) updateData.name = input.name;
+  if (input.category) updateData.category = input.category;
+  if (input.institution) updateData.institution = input.institution;
+  if (input.initialAmount !== undefined) updateData.initial_amount = input.initialAmount;
+  if (input.currentAmount !== undefined) updateData.current_amount = input.currentAmount;
+  if (input.yieldRate !== undefined) updateData.yield_rate = input.yieldRate;
+  if (input.startDate) updateData.start_date = input.startDate;
+  if (input.status) updateData.status = input.status;
+  if (input.notes !== undefined) updateData.notes = input.notes;
+  if (dbEntityId) updateData.entity_id = dbEntityId;
+
+  const { error } = await supabase.from('investments').update(updateData).eq('id', id);
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      const accUpdate: any = {};
+      if (input.name) accUpdate.name = input.name;
+      if (input.currentAmount !== undefined) accUpdate.current_balance = input.currentAmount;
+      if (input.initialAmount !== undefined) accUpdate.initial_balance = input.initialAmount;
+      await supabase.from('accounts').update(accUpdate).eq('id', id);
+      return true;
+    }
+    console.error('Erro ao atualizar investimento:', error);
+    throw new Error(`Falha ao atualizar investimento: ${error.message}`);
+  }
+
+  return true;
+}
+
+/**
+ * Exclui um investimento do sistema
+ */
+export async function deleteInvestment(id: string): Promise<boolean> {
+  const supabase = createClient();
+  const { error } = await supabase.from('investments').delete().eq('id', id);
+
+  if (error) {
+    if (isMissingTableError(error)) {
+      await supabase.from('accounts').delete().eq('id', id);
+      return true;
+    }
+    console.error('Erro ao deletar investimento:', error);
+    throw new Error(`Falha ao excluir investimento: ${error.message}`);
+  }
+
+  return true;
+}
+
+/**
+ * Migra um registro de Dívida existente para o Módulo de Investimentos
+ */
+export async function migrateDebtToInvestment(
+  debtId: string,
+  category: InvestmentCategory = 'RENDA_FIXA'
+): Promise<boolean> {
+  const supabase = createClient();
+
+  // 1. Buscar os dados da dívida
+  const { data: dbDebt, error } = await supabase
+    .from('debts')
+    .select('*')
+    .eq('id', debtId)
+    .single();
+
+  if (error || !dbDebt) {
+    console.error('Erro ao buscar dívida para migração:', error);
+    throw new Error(`Dívida não encontrada: ${error?.message || ''}`);
+  }
+
+  // 2. Criar o investimento no Supabase
+  await createInvestment({
+    entityId: dbDebt.entity_id || 'PF',
+    name: dbDebt.creditor || 'Investimento Migrado',
+    category: category,
+    institution: dbDebt.creditor || 'Instituição Financeira',
+    initialAmount: Number(dbDebt.total_amount || 0),
+    currentAmount: Number(dbDebt.total_amount || 0),
+    yieldRate: dbDebt.interest_rate_monthly ? `${dbDebt.interest_rate_monthly}% a.m.` : '100% CDI',
+    startDate: dbDebt.start_date || new Date().toISOString().split('T')[0],
+    notes: dbDebt.description ? `Migrado da tela de dívidas: ${dbDebt.description}` : 'Migrado da tela de dívidas',
+  });
+
+  // 3. Excluir a dívida original
+  await deleteDebt(debtId);
+
+  return true;
+}
+
+/**
+ * Migra um registro de Investimento existente de volta para o Módulo de Dívidas
+ */
+export async function migrateInvestmentToDebt(
+  investmentId: string,
+  installmentsCount: number = 12
+): Promise<boolean> {
+  const supabase = createClient();
+
+  // 1. Buscar os dados do investimento
+  const { data: dbInv } = await supabase
+    .from('investments')
+    .select('*')
+    .eq('id', investmentId)
+    .single();
+
+  let entityId = 'PF';
+  let creditor = 'Investimento Migrado';
+  let totalAmount = 1000;
+  let startDate = new Date().toISOString().split('T')[0];
+  let description = '';
+
+  if (dbInv) {
+    entityId = dbInv.entity_id || 'PF';
+    creditor = dbInv.name || dbInv.institution || 'Dívida Migrada';
+    totalAmount = Number(dbInv.current_amount || dbInv.initial_amount || 0);
+    startDate = dbInv.start_date || startDate;
+    description = dbInv.notes || dbInv.institution || '';
+  } else {
+    // Tenta buscar de accounts se estiver em fallback
+    const { data: dbAcc } = await supabase.from('accounts').select('*').eq('id', investmentId).single();
+    if (dbAcc) {
+      entityId = dbAcc.entityId || dbAcc.entity_id || 'PF';
+      creditor = dbAcc.name;
+      totalAmount = Number(dbAcc.current_balance || dbAcc.initial_balance || 0);
+    }
+  }
+
+  // 2. Criar dívida com parcelas
+  await createDebtWithInstallments({
+    entityId,
+    creditor,
+    description: description ? `Migrado de Investimentos: ${description}` : 'Migrado de Investimentos',
+    totalAmount,
+    interestRateMonthly: 0,
+    installmentsCount,
+    startDate,
+  });
+
+  // 3. Excluir o investimento original
+  await deleteInvestment(investmentId);
+
+  return true;
+}
+
+
+

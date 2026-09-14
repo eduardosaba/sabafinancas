@@ -24,15 +24,23 @@ import {
   Wifi,
   BarChart3,
   Layers,
+  Eye,
+  FileText,
+  X,
+  Trash2,
+  Edit2,
 } from 'lucide-react';
 import { useEntity } from '@/contexts/entity-context';
 import { useToast } from '@/contexts/toast-context';
-import { Account, CreditCardInvoice, Transaction } from '@/types/finance';
+import { Account, Category, CreditCardInvoice, Transaction } from '@/types/finance';
 import {
   fetchAccounts,
   fetchTransactions,
-  fetchClosedInvoices,
+  fetchCreditCardInvoices,
+  fetchInvoiceTransactions,
+  fetchCategories,
   payCreditCardInvoice,
+  deleteTransaction,
 } from '@/lib/services/finance-service';
 import {
   calculateCreditCardMetrics,
@@ -77,12 +85,46 @@ function getCardSkin(account: Account) {
 
 export default function CreditCardsDashboardPage() {
   const { entity, isHydrated, pjEntities } = useEntity();
-  const { toast } = useToast();
+  const { toast, confirm } = useToast();
 
   const [accounts, setAccounts] = useState<Account[]>([]);
   const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [closedInvoices, setClosedInvoices] = useState<CreditCardInvoice[]>([]);
+  const [allInvoices, setAllInvoices] = useState<CreditCardInvoice[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const handleDeleteInvoiceItem = async (itemId: string, itemDesc: string) => {
+    const isConfirmed = await confirm({
+      title: 'Excluir Lançamento Duplicado?',
+      message: `Deseja excluir a transação "${itemDesc}" do cartão de crédito?`,
+      confirmText: 'Sim, Excluir',
+      cancelText: 'Cancelar',
+      variant: 'danger',
+    });
+
+    if (!isConfirmed) return;
+
+    try {
+      await deleteTransaction(itemId);
+      toast.success(`Lançamento "${itemDesc}" excluído com sucesso!`, 'Item Removido');
+      if (viewingInvoice) {
+        const items = await fetchInvoiceTransactions(viewingInvoice.id);
+        setViewingInvoiceItems(items);
+      }
+      await loadData();
+    } catch (err: any) {
+      console.error('Error deleting invoice item:', err);
+      toast.error(`Falha ao excluir item: ${err?.message || 'Erro inesperado'}`);
+    }
+  };
+
+  // Sub-tab for invoices: CLOSED or PAID
+  const [invoiceTab, setInvoiceTab] = useState<'CLOSED' | 'PAID'>('CLOSED');
+
+  // Viewing invoice items modal state
+  const [viewingInvoice, setViewingInvoice] = useState<CreditCardInvoice | null>(null);
+  const [viewingInvoiceItems, setViewingInvoiceItems] = useState<Transaction[]>([]);
+  const [isLoadingInvoiceItems, setIsLoadingInvoiceItems] = useState(false);
 
   // Filter Tab: ALL, PF, PJ
   const [filterTab, setFilterTab] = useState<'ALL' | 'PF' | 'PJ'>('ALL');
@@ -108,15 +150,17 @@ export default function CreditCardsDashboardPage() {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [accs, txs, invs] = await Promise.all([
+      const [accs, txs, invs, cats] = await Promise.all([
         fetchAccounts('CONSOLIDATED'),
         fetchTransactions({ entityType: 'CONSOLIDATED' }),
-        fetchClosedInvoices('CONSOLIDATED').catch(() => []),
+        fetchCreditCardInvoices('CONSOLIDATED', 'ALL').catch(() => []),
+        fetchCategories('CONSOLIDATED').catch(() => []),
       ]);
 
       setAccounts(accs);
       setTransactions(txs);
-      setClosedInvoices(invs);
+      setAllInvoices(invs);
+      setCategories(cats);
     } catch (err) {
       console.error('Error loading credit cards dashboard data:', err);
     } finally {
@@ -198,9 +242,32 @@ export default function CreditCardsDashboardPage() {
 
   // Closed invoices (filtered by selectedCardId if selected)
   const filteredClosedInvoices = useMemo(() => {
-    if (selectedCardId === 'ALL') return closedInvoices;
-    return closedInvoices.filter((i) => i.accountId === selectedCardId);
-  }, [closedInvoices, selectedCardId]);
+    const closed = allInvoices.filter((i) => i.status === 'CLOSED');
+    if (selectedCardId === 'ALL') return closed;
+    return closed.filter((i) => i.accountId === selectedCardId);
+  }, [allInvoices, selectedCardId]);
+
+  // Paid invoices (filtered by selectedCardId if selected)
+  const filteredPaidInvoices = useMemo(() => {
+    const paid = allInvoices.filter((i) => i.status === 'PAID');
+    if (selectedCardId === 'ALL') return paid;
+    return paid.filter((i) => i.accountId === selectedCardId);
+  }, [allInvoices, selectedCardId]);
+
+  // Handle View Invoice Items
+  const handleViewInvoiceItems = async (inv: CreditCardInvoice) => {
+    setViewingInvoice(inv);
+    setIsLoadingInvoiceItems(true);
+    try {
+      const items = await fetchInvoiceTransactions(inv.id);
+      setViewingInvoiceItems(items);
+    } catch (err) {
+      console.error('Error fetching invoice items:', err);
+      toast.error('Erro ao carregar itens da fatura.');
+    } finally {
+      setIsLoadingInvoiceItems(false);
+    }
+  };
 
   // Handle Pay Credit Card Invoice
   const handlePayConfirm = async () => {
@@ -755,70 +822,169 @@ export default function CreditCardsDashboardPage() {
         </div>
       )}
 
-      {/* Closed Invoices & Pending Purchases Sections */}
+      {/* Closed & Paid Invoices + Pending Purchases Sections */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 pt-2">
 
-        {/* Closed Invoices Pending Settlement */}
+        {/* Invoices (Fechadas & Histórico de Pagas) */}
         <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-4">
-          <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          
+          {/* Header & Sub-tabs */}
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 pb-3">
             <h3 className="text-sm font-bold text-slate-100 flex items-center gap-2">
-              <Clock className="h-4 w-4 text-amber-400" />
-              <span>Faturas Fechadas a Vencer ({filteredClosedInvoices.length})</span>
+              <Receipt className="h-4 w-4 text-blue-400" />
+              <span>Faturas do Cartão</span>
             </h3>
+
+            <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-xl border border-slate-800 text-xs font-semibold">
+              <button
+                type="button"
+                onClick={() => setInvoiceTab('CLOSED')}
+                className={cn(
+                  'px-3 py-1 rounded-lg transition-all flex items-center gap-1.5',
+                  invoiceTab === 'CLOSED'
+                    ? 'bg-amber-950 text-amber-300 border border-amber-800/60 shadow-sm font-bold'
+                    : 'text-slate-400 hover:text-slate-200'
+                )}
+              >
+                <Clock className="h-3.5 w-3.5 text-amber-400" />
+                <span>A Vencer ({filteredClosedInvoices.length})</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setInvoiceTab('PAID')}
+                className={cn(
+                  'px-3 py-1 rounded-lg transition-all flex items-center gap-1.5',
+                  invoiceTab === 'PAID'
+                    ? 'bg-emerald-950 text-emerald-300 border border-emerald-800/60 shadow-sm font-bold'
+                    : 'text-slate-400 hover:text-slate-200'
+                )}
+              >
+                <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400" />
+                <span>Pagas ({filteredPaidInvoices.length})</span>
+              </button>
+            </div>
           </div>
 
-          {filteredClosedInvoices.length === 0 ? (
-            <div className="py-8 text-center text-slate-500 text-xs italic bg-slate-950/40 rounded-xl border border-slate-800/80 p-4">
-              Nenhuma fatura fechada pendente para o filtro selecionado.
-            </div>
-          ) : (
-            <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
-              {filteredClosedInvoices.map((inv) => {
-                const todayStr = new Date().toISOString().split('T')[0];
-                const isOverdue = inv.dueDate < todayStr;
+          {/* CLOSED Invoices Tab Content */}
+          {invoiceTab === 'CLOSED' && (
+            <>
+              {filteredClosedInvoices.length === 0 ? (
+                <div className="py-8 text-center text-slate-500 text-xs italic bg-slate-950/40 rounded-xl border border-slate-800/80 p-4">
+                  Nenhuma fatura fechada a vencer para o filtro selecionado.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {filteredClosedInvoices.map((inv) => {
+                    const todayStr = new Date().toISOString().split('T')[0];
+                    const isOverdue = inv.dueDate < todayStr;
 
-                return (
-                  <div
-                    key={inv.id}
-                    className={cn(
-                      'p-3 rounded-xl border text-xs flex items-center justify-between gap-3 transition-all',
-                      isOverdue
-                        ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
-                        : 'bg-blue-950/40 border-blue-500/30 text-blue-200'
-                    )}
-                  >
-                    <div className="min-w-0 flex-1">
-                      <div className="font-bold text-blue-300 truncate">
-                        [Fatura] {inv.accountName || 'Cartão'} - {inv.referenceMonth}
-                      </div>
-                      <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 font-mono">
-                        <span>Vence {inv.dueDate.split('-').reverse().join('/')}</span>
-                        <span className="font-bold text-slate-100">
-                          {inv.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
-                        {isOverdue && (
-                          <span className="text-[9px] font-bold text-rose-400 uppercase">Vencida</span>
+                    return (
+                      <div
+                        key={inv.id}
+                        className={cn(
+                          'p-3 rounded-xl border text-xs flex items-center justify-between gap-3 transition-all',
+                          isOverdue
+                            ? 'bg-rose-950/40 border-rose-500/40 text-rose-200'
+                            : 'bg-blue-950/40 border-blue-500/30 text-blue-200'
                         )}
-                      </div>
-                    </div>
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold text-blue-300 truncate">
+                            [Fatura] {inv.accountName || 'Cartão'} - {inv.referenceMonth}
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 font-mono">
+                            <span>Vence {inv.dueDate.split('-').reverse().join('/')}</span>
+                            <span className="font-bold text-slate-100">
+                              {inv.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                            {isOverdue && (
+                              <span className="text-[9px] font-bold text-rose-400 uppercase">Vencida</span>
+                            )}
+                          </div>
+                        </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPayingInvoice(inv);
-                        setPayAmount(inv.totalAmount.toString());
-                        if (checkingAccounts.length > 0) setPaySourceAccId(checkingAccounts[0].id);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors flex items-center gap-1 flex-shrink-0"
-                    >
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                      <span>Baixa</span>
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleViewInvoiceItems(inv)}
+                            title="Ver lançamentos desta fatura"
+                            className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 font-semibold text-xs transition-colors flex items-center gap-1"
+                          >
+                            <Eye className="h-3.5 w-3.5 text-blue-400" />
+                            <span className="hidden sm:inline">Itens</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPayingInvoice(inv);
+                              setPayAmount(inv.totalAmount.toString());
+                              if (checkingAccounts.length > 0) setPaySourceAccId(checkingAccounts[0].id);
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs transition-colors flex items-center gap-1"
+                          >
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Baixa</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
           )}
+
+          {/* PAID Invoices Tab Content (Histórico de Faturas Pagas) */}
+          {invoiceTab === 'PAID' && (
+            <>
+              {filteredPaidInvoices.length === 0 ? (
+                <div className="py-8 text-center text-slate-500 text-xs italic bg-slate-950/40 rounded-xl border border-slate-800/80 p-4">
+                  Nenhuma fatura paga encontrada no histórico.
+                </div>
+              ) : (
+                <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                  {filteredPaidInvoices.map((inv) => {
+                    return (
+                      <div
+                        key={inv.id}
+                        className="p-3 rounded-xl bg-slate-950/70 border border-emerald-900/40 text-xs flex items-center justify-between gap-3 hover:border-emerald-700/60 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-emerald-300 truncate">
+                              [Fatura Paga] {inv.accountName || 'Cartão'} - {inv.referenceMonth}
+                            </span>
+                            <span className="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-950 text-emerald-400 border border-emerald-800 uppercase flex-shrink-0">
+                              Quitada
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2 text-[11px] text-slate-400 mt-0.5 font-mono">
+                            <span>Vencimento: {inv.dueDate.split('-').reverse().join('/')}</span>
+                            <span className="font-bold text-emerald-400">
+                              {inv.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleViewInvoiceItems(inv)}
+                          title="Ver lançamentos desta fatura paga"
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-xs transition-colors flex items-center gap-1.5 flex-shrink-0 border border-slate-700"
+                        >
+                          <Eye className="h-3.5 w-3.5 text-emerald-400" />
+                          <span>Ver Itens</span>
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </>
+          )}
+
         </div>
 
         {/* Detailed Pending Card Transactions Audit List */}
@@ -853,8 +1019,19 @@ export default function CreditCardsDashboardPage() {
                       </div>
                     </div>
 
-                    <div className="text-right font-bold font-mono text-sm text-slate-100">
-                      {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                    <div className="flex items-center gap-3">
+                      <div className="text-right font-bold font-mono text-sm text-slate-100">
+                        {tx.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteInvoiceItem(tx.id, tx.description)}
+                        title="Excluir Lançamento do Cartão"
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                      >
+                        <Trash2 className="h-4 w-4" />
+                      </button>
                     </div>
                   </div>
                 );
@@ -961,6 +1138,126 @@ export default function CreditCardsDashboardPage() {
                   <CheckCircle2 className="h-4 w-4" />
                 )}
                 <span>Confirmar Baixa em Lote</span>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* Invoice Details / Items Modal */}
+      {viewingInvoice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="w-full max-w-2xl p-6 rounded-2xl bg-slate-900 border border-slate-700 shadow-2xl space-y-4 max-h-[85vh] flex flex-col">
+
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3 flex-shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-blue-950 border border-blue-800 text-blue-400">
+                  <FileText className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-100 flex items-center gap-2">
+                    <span>Detalhamento da Fatura ({viewingInvoice.referenceMonth})</span>
+                    <span
+                      className={cn(
+                        'text-[10px] font-bold px-2 py-0.5 rounded-full uppercase border',
+                        viewingInvoice.status === 'PAID'
+                          ? 'bg-emerald-950 text-emerald-400 border-emerald-800'
+                          : 'bg-amber-950 text-amber-300 border-amber-800'
+                      )}
+                    >
+                      {viewingInvoice.status === 'PAID' ? 'Quitada' : 'Fechada (A Vencer)'}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400">
+                    {viewingInvoice.accountName || 'Cartão de Crédito'} | Vencimento: {viewingInvoice.dueDate.split('-').reverse().join('/')}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setViewingInvoice(null);
+                  setViewingInvoiceItems([]);
+                }}
+                className="p-1.5 rounded-lg text-slate-400 hover:text-slate-100 hover:bg-slate-800 transition-colors"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Total Amount Summary */}
+            <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex items-center justify-between text-xs flex-shrink-0">
+              <span className="text-slate-400 font-semibold">Valor Total Faturado:</span>
+              <strong className="text-lg font-mono font-extrabold text-emerald-400">
+                {viewingInvoice.totalAmount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+              </strong>
+            </div>
+
+            {/* Items List */}
+            <div className="flex-1 overflow-y-auto pr-1 space-y-2 min-h-0">
+              {isLoadingInvoiceItems ? (
+                <div className="py-8 flex items-center justify-center gap-2 text-slate-400 text-xs">
+                  <RefreshCw className="h-4 w-4 animate-spin text-blue-400" />
+                  <span>Carregando lançamentos vinculados a esta fatura...</span>
+                </div>
+              ) : viewingInvoiceItems.length === 0 ? (
+                <div className="py-8 text-center text-slate-500 text-xs italic bg-slate-950/40 rounded-xl border border-slate-800/80 p-4">
+                  Nenhum lançamento individual encontrado para esta fatura.
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {viewingInvoiceItems.map((item) => {
+                    const cat = categories.find((c) => c.id === item.categoryId);
+                    return (
+                      <div
+                        key={item.id}
+                        className="p-3 rounded-xl bg-slate-950/60 border border-slate-800/80 text-xs flex items-center justify-between gap-3 hover:border-slate-700 transition-colors"
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-slate-100 truncate">{item.description}</div>
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400 font-mono mt-0.5">
+                            <span>{item.transactionDate.split('-').reverse().join('/')}</span>
+                            {cat && (
+                              <span className="text-slate-400 font-sans">| {cat.name}</span>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <div className="text-right font-mono font-bold text-sm text-slate-100">
+                            {item.amount.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteInvoiceItem(item.id, item.description)}
+                            title="Excluir Lançamento Duplicado"
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-400 hover:bg-rose-950/40 transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="pt-3 border-t border-slate-800 flex justify-end flex-shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewingInvoice(null);
+                  setViewingInvoiceItems([]);
+                }}
+                className="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-semibold transition-colors"
+              >
+                Fechar
               </button>
             </div>
 
