@@ -2,6 +2,7 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 export async function middleware(request: NextRequest) {
+  const url = request.nextUrl.clone();
   let supabaseResponse = NextResponse.next({
     request,
   });
@@ -34,21 +35,24 @@ export async function middleware(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const url = request.nextUrl.clone();
-  const isAuthRoute = url.pathname === '/login' || url.pathname === '/register';
+  const isAuthRoute =
+    url.pathname.startsWith('/login') ||
+    url.pathname.startsWith('/register') ||
+    url.pathname.startsWith('/melesaba') ||
+    url.pathname.startsWith('/familia');
+
+  const hasLogout = url.searchParams.get('logout') === 'true';
 
   // If user is NOT logged in and trying to access protected dashboard routes
   if (!user && !isAuthRoute) {
-    // For demo purposes when using placeholder keys, if no session, allow unless explicitly logging in
-    // But if anon key is real, redirect to /login
     if (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY && !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY.includes('placeholder')) {
       url.pathname = '/login';
       return NextResponse.redirect(url);
     }
   }
 
-  // If user IS logged in and trying to access /login or /register, redirect to /
-  if (user && isAuthRoute) {
+  // If user IS logged in and trying to access auth routes without logout parameter, redirect to dashboard
+  if (user && isAuthRoute && !hasLogout) {
     url.pathname = '/';
     return NextResponse.redirect(url);
   }

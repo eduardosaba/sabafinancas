@@ -1,6 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'next/navigation';
 import {
   Receipt,
   Search,
@@ -25,7 +26,16 @@ import {
 } from 'lucide-react';
 import { useEntity } from '@/contexts/entity-context';
 import { useDateFilter } from '@/contexts/date-filter-context';
-import { Account, Category, CreditCardInvoice, Transaction, TransactionType } from '@/types/finance';
+import { useToast } from '@/contexts/toast-context';
+import { QuickTransactionInput } from '@/components/transactions/quick-input';
+import { TransactionModal } from '@/components/transactions/transaction-modal';
+import {
+  Account,
+  Category,
+  CreditCardInvoice,
+  Transaction,
+  TransactionType,
+} from '@/types/finance';
 import {
   createTransaction,
   deleteTransaction,
@@ -37,16 +47,14 @@ import {
   fetchUsers,
   updateTransaction,
 } from '@/lib/services/finance-service';
-import { TransactionModal } from '@/components/transactions/transaction-modal';
-import { QuickTransactionInput } from '@/components/transactions/quick-input';
 import { CurrencyInput } from '@/components/ui/currency-input';
-import { useToast } from '@/contexts/toast-context';
 import { cn } from '@/lib/utils';
 
 export default function TransactionsPage() {
   const { entity, config, isHydrated, pjEntities, activeCompany } = useEntity();
   const { filter } = useDateFilter();
   const { toast } = useToast();
+  const searchParams = useSearchParams();
 
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [accounts, setAccounts] = useState<Account[]>([]);
@@ -60,6 +68,13 @@ export default function TransactionsPage() {
   const [selectedStatus, setSelectedStatus] = useState<'ALL' | 'PAID' | 'PENDING'>('ALL');
   const [selectedAccountId, setSelectedAccountId] = useState<string>('ALL');
   const [selectedAccountTypeFilter, setSelectedAccountTypeFilter] = useState<'ALL' | 'CREDIT_CARD' | 'CHECKING'>('ALL');
+
+  useEffect(() => {
+    const accParam = searchParams?.get('account');
+    if (accParam) {
+      setSelectedAccountId(accParam);
+    }
+  }, [searchParams]);
 
   // Paid Invoices History in Transactions
   const [paidInvoices, setPaidInvoices] = useState<CreditCardInvoice[]>([]);
@@ -390,6 +405,7 @@ export default function TransactionsPage() {
         <QuickTransactionInput
           accounts={accounts}
           categories={categories}
+          onOpenManual={() => setIsNewModalOpen(true)}
           onConfirm={async (newTxData) => {
             const targetEntityId =
               newTxData.entityId === 'PJ' || newTxData.entityId === '22222222-2222-2222-2222-222222222222'
@@ -1043,7 +1059,7 @@ export default function TransactionsPage() {
                 <label className="font-semibold text-slate-300 block">Valor</label>
                 <CurrencyInput
                   value={editAmount}
-                  onChangeValue={(num) => setEditAmount(num.toString())}
+                  onChangeValue={(num: number) => setEditAmount(num.toString())}
                 />
               </div>
 

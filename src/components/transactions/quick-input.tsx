@@ -35,12 +35,20 @@ interface QuickTransactionInputProps {
   accounts: Account[];
   categories: Category[];
   onConfirm: (transaction: Omit<Transaction, 'id' | 'createdAt'>) => Promise<void> | void;
+  onOpenManual?: () => void;
+  autoFocus?: boolean;
+  autoStartVoice?: boolean;
+  autoOpenCamera?: boolean;
 }
 
 export function QuickTransactionInput({
   accounts,
   categories,
   onConfirm,
+  onOpenManual,
+  autoFocus,
+  autoStartVoice,
+  autoOpenCamera,
 }: QuickTransactionInputProps) {
   const { entity, config, pjEntities, activeCompany, reloadEntities } = useEntity();
   const { toast } = useToast();
@@ -111,11 +119,12 @@ export function QuickTransactionInput({
       };
 
       recognition.onerror = (event: any) => {
-        console.error('Erro de reconhecimento de voz:', event.error);
         setIsListening(false);
-        if (event.error !== 'no-speech') {
-          toast.error(`Erro no microfone: ${event.error}`);
+        if (event.error === 'no-speech' || event.error === 'aborted') {
+          return;
         }
+        console.error('Erro de reconhecimento de voz:', event.error);
+        toast.error(`Erro no microfone: ${event.error}`);
       };
 
       recognition.onend = () => {
@@ -130,6 +139,26 @@ export function QuickTransactionInput({
       toast.error('Não foi possível iniciar o microfone.');
     }
   };
+
+  useEffect(() => {
+    if (autoFocus) {
+      setTimeout(() => inputRef.current?.focus(), 200);
+    }
+    if (autoStartVoice) {
+      setTimeout(() => toggleListening(), 300);
+    }
+    if (autoOpenCamera) {
+      setTimeout(() => fileInputRef.current?.click(), 300);
+    }
+
+    return () => {
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.abort();
+        } catch (e) {}
+      }
+    };
+  }, [autoFocus, autoStartVoice, autoOpenCamera]);
 
   // Handle Receipt Photo OCR Upload
   const handleReceiptPhotoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -331,6 +360,18 @@ export function QuickTransactionInput({
 
         {/* Action Buttons inside input bar */}
         <div className="absolute inset-y-1.5 right-1.5 flex items-center gap-1">
+          {/* Botão + Lançamento Manual Form */}
+          {onOpenManual && (
+            <button
+              type="button"
+              onClick={onOpenManual}
+              title="Abrir Formulário Manual Completo (+ Form)"
+              className="p-2 rounded-xl bg-slate-800/80 border border-slate-700 text-amber-400 hover:text-amber-300 hover:bg-slate-700 text-xs font-semibold flex items-center gap-1 transition-all"
+            >
+              <Plus className="h-4 w-4 text-amber-400" />
+            </button>
+          )}
+
           {/* Botão de Voz (Web Speech API) */}
           <button
             type="button"
@@ -512,7 +553,7 @@ export function QuickTransactionInput({
                   className={cn(
                     'flex-1 py-1.5 rounded-md text-[11px] font-bold flex items-center justify-center gap-1 transition-all',
                     type === 'TRANSFER'
-                      ? 'bg-purple-600 text-white shadow-sm'
+                      ? 'bg-indigo-600 text-white shadow-sm'
                       : 'text-slate-400 hover:text-slate-200'
                   )}
                 >

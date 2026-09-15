@@ -24,14 +24,19 @@ import {
   TrendingUp,
   Landmark,
   ShieldCheck,
+  Edit3,
+  Mic,
+  Camera,
+  Sparkles,
 } from 'lucide-react';
 import { useEntity, EntityType } from '@/contexts/entity-context';
 import { useDateFilter, DatePeriodOption } from '@/contexts/date-filter-context';
 import { useTheme } from '@/contexts/theme-context';
 import { TransactionModal } from '@/components/transactions/transaction-modal';
+import { QuickTransactionInput } from '@/components/transactions/quick-input';
 import { CompanyModal } from '@/components/companies/company-modal';
 import { PendingPaymentsSidebarWidget } from '@/components/layout/pending-sidebar-widget';
-import { fetchAccounts, fetchCategories, ensureUserExistsInDb } from '@/lib/services/finance-service';
+import { fetchAccounts, fetchCategories, ensureUserExistsInDb, createTransaction } from '@/lib/services/finance-service';
 import { checkUserAccessStatus } from '@/lib/services/user-service';
 import { createClient } from '@/lib/supabase/client';
 import { Account, Category } from '@/types/finance';
@@ -101,7 +106,7 @@ export function Header() {
             name = prefix
               .replace(/[._-]/g, ' ')
               .split(' ')
-              .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+              .map((part: string) => part.charAt(0).toUpperCase() + part.slice(1))
               .join(' ');
           }
 
@@ -760,16 +765,16 @@ export function Sidebar() {
   return (
     <aside className="hidden lg:flex w-64 flex-col border-r border-slate-800 bg-slate-950 p-4 min-h-[calc(100vh-4rem)]">
       
-      <div className={cn('mb-4 p-3.5 rounded-xl border transition-all duration-300', config.bgColor, config.borderColor)}>
+      <div className={cn('sidebar-mode-card mb-4 p-3.5 rounded-xl border transition-all duration-300', config.bgColor, config.borderColor)}>
         <div className="flex items-center gap-2">
-          <div className={cn('p-2 rounded-lg bg-slate-900/80 border border-slate-800', config.textColor)}>
+          <div className={cn('sidebar-mode-icon-box p-2 rounded-lg bg-slate-900/80 border border-slate-800', config.textColor)}>
             {entity === 'PF' && <User className="h-4 w-4" />}
             {entity === 'PJ' && <Building2 className="h-4 w-4" />}
             {entity === 'CONSOLIDATED' && <BarChart3 className="h-4 w-4" />}
           </div>
           <div>
-            <span className="text-xs font-semibold text-slate-400 block uppercase tracking-wider">Modo Ativo</span>
-            <span className={cn('text-sm font-bold block', config.textColor)}>{config.label}</span>
+            <span className="sidebar-mode-subtitle text-xs font-semibold text-slate-400 block uppercase tracking-wider">Modo Ativo</span>
+            <span className={cn('sidebar-mode-title text-sm font-bold block', config.textColor)}>{config.label}</span>
           </div>
         </div>
       </div>
@@ -817,17 +822,24 @@ export function MobileBottomNav() {
   const pathname = usePathname();
   const { config } = useEntity();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [quickMode, setQuickMode] = useState<'NONE' | 'TEXT' | 'VOICE' | 'PHOTO'>('NONE');
   const [modalAccounts, setModalAccounts] = useState<Account[]>([]);
   const [modalCategories, setModalCategories] = useState<Category[]>([]);
 
-  const handleOpenModal = async () => {
-    const [accs, cats] = await Promise.all([
-      fetchAccounts('CONSOLIDATED'),
-      fetchCategories('CONSOLIDATED'),
-    ]);
-    setModalAccounts(accs);
-    setModalCategories(cats);
-    setIsModalOpen(true);
+  const loadAccountsAndCategories = async () => {
+    if (modalAccounts.length === 0 || modalCategories.length === 0) {
+      const [accs, cats] = await Promise.all([
+        fetchAccounts('CONSOLIDATED'),
+        fetchCategories('CONSOLIDATED'),
+      ]);
+      setModalAccounts(accs);
+      setModalCategories(cats);
+    }
+  };
+
+  const handleOpenQuickInput = async () => {
+    await loadAccountsAndCategories();
+    setQuickMode('TEXT');
   };
 
   const handleOpenMenuDrawer = () => {
@@ -836,7 +848,8 @@ export function MobileBottomNav() {
 
   return (
     <>
-      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-slate-950/95 border-t border-slate-800 backdrop-blur-md px-1 py-1.5 flex items-center justify-around shadow-2xl">
+      {/* Fixed Bottom Navigation Bar */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-50 bg-slate-950/95 border-t border-slate-800 backdrop-blur-md px-1 py-1.5 flex items-center justify-around shadow-2xl">
         <Link
           href="/"
           className={cn(
@@ -859,11 +872,13 @@ export function MobileBottomNav() {
           <span>Cartões</span>
         </Link>
 
-        {/* Central Floating Quick Transaction Launch Button */}
+        {/* Central Floating Plus Trigger - Directly Opens Quick Launch Modal */}
         <button
           type="button"
-          onClick={handleOpenModal}
-          className="flex flex-col items-center justify-center -mt-5 p-3 rounded-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-lg shadow-emerald-950/90 border-2 border-slate-950 transition-all active:scale-95"
+          onClick={handleOpenQuickInput}
+          className={cn(
+            'flex flex-col items-center justify-center -mt-5 p-3 rounded-full text-white font-bold shadow-lg shadow-emerald-950/90 border-2 border-slate-950 transition-all duration-300 active:scale-95 z-50 bg-emerald-600 hover:bg-emerald-500'
+          )}
           title="Novo Lançamento Rápido"
         >
           <Plus className="h-5 w-5" />
@@ -880,7 +895,6 @@ export function MobileBottomNav() {
           <span>Extrato</span>
         </Link>
 
-        {/* Mobile Menu Drawer Trigger Button */}
         <button
           type="button"
           onClick={handleOpenMenuDrawer}
@@ -892,7 +906,45 @@ export function MobileBottomNav() {
         </button>
       </nav>
 
-      {/* Transaction Modal for Mobile Quick Launch */}
+      {/* Modal Quick Transaction Input (Text, Voice, Photo, + Manual Form) */}
+      {quickMode !== 'NONE' && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-sm animate-in fade-in duration-150">
+          <div className="relative w-full max-w-lg bg-slate-900 border border-slate-800 rounded-3xl shadow-2xl p-5 space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <span className="text-xs font-bold text-slate-100 flex items-center gap-2">
+                <Sparkles className="h-4 w-4 text-emerald-400" />
+                Lançamento Rápido
+              </span>
+              <button
+                type="button"
+                onClick={() => setQuickMode('NONE')}
+                className="text-slate-400 hover:text-slate-200 p-1"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            <QuickTransactionInput
+              accounts={modalAccounts}
+              categories={modalCategories}
+              autoFocus={true}
+              onOpenManual={() => {
+                setQuickMode('NONE');
+                setIsModalOpen(true);
+              }}
+              onConfirm={async (tx) => {
+                await createTransaction(tx);
+                setQuickMode('NONE');
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(new CustomEvent('transactionUpdated'));
+                }
+              }}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Transaction Modal for Manual Structured Entry */}
       <TransactionModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

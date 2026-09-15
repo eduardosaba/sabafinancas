@@ -2,11 +2,12 @@
 
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import Link from 'next/link';
-import { Settings, Wallet, Plus, CheckCircle2, Clock, Trash2, Edit2, CreditCard, Upload, Image as ImageIcon, X } from 'lucide-react';
+import { Settings, Wallet, Plus, CheckCircle2, Clock, Trash2, Edit2, CreditCard, Upload, Image as ImageIcon, X, Receipt } from 'lucide-react';
 import { useEntity } from '@/contexts/entity-context';
-import { Account, AccountType } from '@/types/finance';
-import { createAccount, deleteAccount, fetchAccounts, updateAccount } from '@/lib/services/finance-service';
+import { Account, AccountType, Category } from '@/types/finance';
+import { createAccount, deleteAccount, fetchAccounts, updateAccount, fetchCategories } from '@/lib/services/finance-service';
 import { CurrencyInput } from '@/components/ui/currency-input';
+import { AccountStatementModal } from '@/components/accounts/account-statement-modal';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/contexts/toast-context';
 
@@ -86,11 +87,18 @@ export default function AccountsSettingsPage() {
   const [editCardImageUrl, setEditCardImageUrl] = useState('');
   const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
 
+  const [statementAccount, setStatementAccount] = useState<Account | null>(null);
+  const [categories, setCategories] = useState<Category[]>([]);
+
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const data = await fetchAccounts('CONSOLIDATED');
-      setAccounts(data);
+      const [accs, cats] = await Promise.all([
+        fetchAccounts('CONSOLIDATED'),
+        fetchCategories('CONSOLIDATED').catch(() => []),
+      ]);
+      setAccounts(accs);
+      setCategories(cats);
     } catch (err) {
       console.error('Error loading accounts:', err);
     } finally {
@@ -457,6 +465,15 @@ export default function AccountsSettingsPage() {
                   <div className="flex items-center gap-1.5">
                     <button
                       type="button"
+                      onClick={() => setStatementAccount(acc)}
+                      title="Ver Extrato de Transações da Conta"
+                      className="px-2 py-1 rounded-lg text-emerald-400 hover:text-emerald-300 hover:bg-slate-800 transition-colors flex items-center gap-1 text-xs font-bold border border-emerald-500/30 bg-emerald-950/40"
+                    >
+                      <Receipt className="h-3.5 w-3.5" />
+                      <span>Extrato</span>
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => handleOpenEdit(acc)}
                       title="Editar Registro"
                       className="p-1.5 rounded-lg text-slate-400 hover:text-blue-400 hover:bg-slate-800 transition-colors"
@@ -490,9 +507,14 @@ export default function AccountsSettingsPage() {
                 )}
 
                 <div className="pt-2 border-t border-slate-800/80 flex items-center justify-between">
-                  <span className="text-xs text-slate-400">
-                    {isCard ? 'Fatura Aberta / Saldo' : 'Saldo Atual'}
-                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setStatementAccount(acc)}
+                    className="text-xs font-bold text-slate-300 hover:text-emerald-400 transition-colors flex items-center gap-1.5 group"
+                  >
+                    <Receipt className="h-3.5 w-3.5 text-emerald-400 group-hover:scale-110 transition-transform" />
+                    <span>Ver Extrato</span>
+                  </button>
                   <span className={cn('text-lg font-bold font-mono', isCard ? 'text-purple-300' : 'text-slate-100')}>
                     {acc.currentBalance.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
                   </span>
@@ -896,6 +918,17 @@ export default function AccountsSettingsPage() {
             </div>
           </form>
         </div>
+      )}
+
+      {/* Account Statement Modal */}
+      {statementAccount && (
+        <AccountStatementModal
+          isOpen={!!statementAccount}
+          onClose={() => setStatementAccount(null)}
+          account={statementAccount}
+          allAccounts={accounts}
+          categories={categories}
+        />
       )}
     </div>
   );

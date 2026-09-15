@@ -361,6 +361,27 @@ html.light textarea::placeholder {
 /* ==========================================
    FLOATING CALCULATOR LIGHT MODE FIXES
    ========================================== */
+html.light .floating-calculator-launcher-btn {
+  background-color: #ffffff !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.05) !important;
+}
+
+html.light .floating-calculator-launcher-btn:hover {
+  background-color: #f8fafc !important;
+  border-color: #94a3b8 !important;
+}
+
+html.light .floating-calculator-launcher-btn .floating-calculator-launcher-icon {
+  color: #059669 !important;
+}
+
+html.light .floating-calculator-launcher-btn .floating-calculator-launcher-text {
+  color: #0f172a !important;
+  font-weight: 700 !important;
+}
+
 html.light .floating-calculator-card {
   background-color: #ffffff !important;
   border-color: #e2e8f0 !important;
@@ -473,54 +494,193 @@ html.light .floating-calculator-btn-action:hover {
 }
 
 /* -------------------------------------------------------------
-   COLOR PRESET THEMES (Graphite & Mint, Titanium & Cobalt, Deep Onyx & Gold)
+   DARK MODE COLOR PRESETS (Graphite & Mint, Titanium & Cobalt, Deep Onyx & Gold)
    ------------------------------------------------------------- */
 
 /* Preset 1: Graphite & Mint (Linear / Stripe style - Recommended) */
-[data-color-preset="graphite-mint"] body,
-[data-color-preset="graphite-mint"] main {
+html.dark[data-color-preset="graphite-mint"] body,
+html.dark[data-color-preset="graphite-mint"] main {
   background-color: #09090b !important;
 }
-[data-color-preset="graphite-mint"] aside,
-[data-color-preset="graphite-mint"] header {
+html.dark[data-color-preset="graphite-mint"] aside,
+html.dark[data-color-preset="graphite-mint"] header {
   background-color: #09090b !important;
   border-color: #27272a !important;
 }
-[data-color-preset="graphite-mint"] main .bg-slate-900,
-[data-color-preset="graphite-mint"] main [class*="bg-slate-900"] {
+html.dark[data-color-preset="graphite-mint"] main .bg-slate-900,
+html.dark[data-color-preset="graphite-mint"] main [class*="bg-slate-900"],
+html.dark[data-color-preset="graphite-mint"] main [class*="bg-zinc-900"] {
   background-color: #121215 !important;
   border-color: #27272a !important;
 }
 
 /* Preset 2: Titanium & Cobalt (Corporate / Nubank PJ style) */
-[data-color-preset="titanium-cobalt"] body,
-[data-color-preset="titanium-cobalt"] main {
+html.dark[data-color-preset="titanium-cobalt"] body,
+html.dark[data-color-preset="titanium-cobalt"] main {
   background-color: #0b0f19 !important;
 }
-[data-color-preset="titanium-cobalt"] aside,
-[data-color-preset="titanium-cobalt"] header {
+html.dark[data-color-preset="titanium-cobalt"] aside,
+html.dark[data-color-preset="titanium-cobalt"] header {
   background-color: #0b0f19 !important;
   border-color: #1e293b !important;
 }
-[data-color-preset="titanium-cobalt"] main .bg-slate-900,
-[data-color-preset="titanium-cobalt"] main [class*="bg-slate-900"] {
+html.dark[data-color-preset="titanium-cobalt"] main .bg-slate-900,
+html.dark[data-color-preset="titanium-cobalt"] main [class*="bg-slate-900"],
+html.dark[data-color-preset="titanium-cobalt"] main [class*="bg-zinc-900"] {
   background-color: #111827 !important;
   border-color: #1e293b !important;
 }
 
 /* Preset 3: Deep Onyx & Warm Gold (Private Banking style) */
-[data-color-preset="deep-onyx-gold"] body,
-[data-color-preset="deep-onyx-gold"] main {
+html.dark[data-color-preset="deep-onyx-gold"] body,
+html.dark[data-color-preset="deep-onyx-gold"] main {
   background-color: #050505 !important;
 }
-[data-color-preset="deep-onyx-gold"] aside,
-[data-color-preset="deep-onyx-gold"] header {
+html.dark[data-color-preset="deep-onyx-gold"] aside,
+html.dark[data-color-preset="deep-onyx-gold"] header {
   background-color: #050505 !important;
   border-color: #262626 !important;
 }
-[data-color-preset="deep-onyx-gold"] main .bg-slate-900,
-[data-color-preset="deep-onyx-gold"] main [class*="bg-slate-900"] {
+html.dark[data-color-preset="deep-onyx-gold"] main .bg-slate-900,
+html.dark[data-color-preset="deep-onyx-gold"] main [class*="bg-slate-900"],
+html.dark[data-color-preset="deep-onyx-gold"] main [class*="bg-zinc-900"] {
   background-color: #121212 !important;
   border-color: #262626 !important;
 }
+
+/* -------------------------------------------------------------
+   LIGHT MODE EXECUTIVE FINTECH DESIGN POLISH
+   ------------------------------------------------------------- */
+html.light body,
+html.light main {
+  background-color: #f8fafc !important;
+  color: #0f172a !important;
+}
+
+html.light header,
+html.light aside {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+}
+
+html.light main [class*="bg-slate-900"],
+html.light main [class*="bg-zinc-900"],
+html.light main [class*="bg-slate-950"],
+html.light main [class*="bg-zinc-950"] {
+  background-color: #ffffff !important;
+  border-color: #e2e8f0 !important;
+  color: #0f172a !important;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05), 0 1px 2px -1px rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Consolidado & Neutral Active Buttons in Light Mode */
+html.light .bg-violet-950\/40,
+html.light [class*="bg-violet-950"] {
+  background-color: #eef2ff !important;
+  border-color: #c7d2fe !important;
+  color: #3730a3 !important;
+}
+
+html.light .bg-zinc-800,
+html.light [class*="bg-zinc-800"] {
+  background-color: #f1f5f9 !important;
+  border-color: #cbd5e1 !important;
+  color: #0f172a !important;
+}
+
+html.light button.bg-indigo-600,
+html.light [class*="bg-indigo-600"] {
+  background-color: #4f46e5 !important;
+  color: #ffffff !important;
+}
+
+html.light .text-indigo-400 {
+  color: #4338ca !important;
+}
+
+html.light .text-zinc-400,
+html.light .text-zinc-300,
+html.light .text-slate-400,
+html.light .text-slate-300 {
+  color: #334155 !important;
+}
+
+html.light .text-zinc-100,
+html.light .text-zinc-200,
+html.light .text-slate-100,
+html.light .text-slate-200 {
+  color: #0f172a !important;
+}
+
+/* ==========================================
+   SIDEBAR ACTIVE MODE CARD (PF / PJ / CONSOLIDATED) IN LIGHT MODE
+   ========================================== */
+html.light .sidebar-mode-card {
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.05) !important;
+}
+
+/* Consolidado Mode Card (PF + PJ) */
+html.light .sidebar-mode-card[class*="bg-zinc"] {
+  background-color: #eef2ff !important;
+  border-color: #c7d2fe !important;
+}
+
+html.light .sidebar-mode-card[class*="bg-zinc"] .sidebar-mode-icon-box {
+  background-color: #ffffff !important;
+  border-color: #c7d2fe !important;
+  color: #4338ca !important;
+}
+
+html.light .sidebar-mode-card[class*="bg-zinc"] .sidebar-mode-subtitle {
+  color: #475569 !important;
+}
+
+html.light .sidebar-mode-card[class*="bg-zinc"] .sidebar-mode-title {
+  color: #3730a3 !important;
+  font-weight: 800 !important;
+}
+
+/* PF Mode Card */
+html.light .sidebar-mode-card[class*="bg-emerald"] {
+  background-color: #ecfdf5 !important;
+  border-color: #a7f3d0 !important;
+}
+
+html.light .sidebar-mode-card[class*="bg-emerald"] .sidebar-mode-icon-box {
+  background-color: #ffffff !important;
+  border-color: #a7f3d0 !important;
+  color: #047857 !important;
+}
+
+html.light .sidebar-mode-card[class*="bg-emerald"] .sidebar-mode-subtitle {
+  color: #047857 !important;
+}
+
+html.light .sidebar-mode-card[class*="bg-emerald"] .sidebar-mode-title {
+  color: #065f46 !important;
+  font-weight: 800 !important;
+}
+
+/* PJ Mode Card */
+html.light .sidebar-mode-card[class*="bg-blue"] {
+  background-color: #eff6ff !important;
+  border-color: #bfdbfe !important;
+}
+
+html.light .sidebar-mode-card[class*="bg-blue"] .sidebar-mode-icon-box {
+  background-color: #ffffff !important;
+  border-color: #bfdbfe !important;
+  color: #1d4ed8 !important;
+}
+
+html.light .sidebar-mode-card[class*="bg-blue"] .sidebar-mode-subtitle {
+  color: #1d4ed8 !important;
+}
+
+html.light .sidebar-mode-card[class*="bg-blue"] .sidebar-mode-title {
+  color: #1e40af !important;
+  font-weight: 800 !important;
+}
+
+
 

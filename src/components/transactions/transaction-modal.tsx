@@ -29,6 +29,7 @@ interface TransactionModalProps {
   onClose: () => void;
   accounts: Account[];
   categories: Category[];
+  defaultAccountId?: string;
   onSuccess: () => void;
 }
 
@@ -37,6 +38,7 @@ export function TransactionModal({
   onClose,
   accounts,
   categories,
+  defaultAccountId,
   onSuccess,
 }: TransactionModalProps) {
   const { entity, pjEntities, activeCompany, reloadEntities } = useEntity();
@@ -49,7 +51,7 @@ export function TransactionModal({
   // Form states
   const [amount, setAmount] = useState('');
   const [description, setDescription] = useState('');
-  const [accountId, setAccountId] = useState(accounts[0]?.id || '');
+  const [accountId, setAccountId] = useState(defaultAccountId || accounts[0]?.id || '');
   const [destinationAccountId, setDestinationAccountId] = useState(accounts[1]?.id || accounts[0]?.id || '');
   const [categoryId, setCategoryId] = useState(categories[0]?.id || '');
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
@@ -68,10 +70,15 @@ export function TransactionModal({
       const defaultPjId = activeCompany?.id || pjEntities[0]?.id || '22222222-2222-2222-2222-222222222222';
       setSelectedPjCompanyId(defaultPjId);
 
-      if (accounts.length > 0) {
+      if (defaultAccountId && accounts.some((a) => a.id === defaultAccountId)) {
+        setAccountId(defaultAccountId);
+      } else if (accounts.length > 0) {
         if (!accountId || !accounts.some((a) => a.id === accountId)) {
           setAccountId(accounts[0].id);
         }
+      }
+
+      if (accounts.length > 0) {
         if (!destinationAccountId || !accounts.some((a) => a.id === destinationAccountId)) {
           setDestinationAccountId(accounts[1]?.id || accounts[0].id);
         }
@@ -80,7 +87,7 @@ export function TransactionModal({
         setCategoryId(categories[0].id);
       }
     }
-  }, [isOpen, accounts, categories, entity, activeCompany, pjEntities]);
+  }, [isOpen, accounts, categories, entity, activeCompany, pjEntities, defaultAccountId]);
 
   if (!isOpen) return null;
 
@@ -189,7 +196,7 @@ export function TransactionModal({
               className={cn(
                 'flex-1 py-2 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition-all',
                 activeTab === 'TRANSFER'
-                  ? 'bg-purple-600 text-white shadow-md'
+                  ? 'bg-indigo-600 text-white shadow-md'
                   : 'text-slate-400 hover:text-slate-200'
               )}
             >
@@ -454,7 +461,7 @@ export function TransactionModal({
                 'px-4 py-2 rounded-xl text-white text-xs font-bold shadow-md transition-all flex items-center gap-1.5',
                 activeTab === 'EXPENSE' && 'bg-rose-600 hover:bg-rose-500',
                 activeTab === 'INCOME' && 'bg-emerald-600 hover:bg-emerald-500',
-                activeTab === 'TRANSFER' && 'bg-purple-600 hover:bg-purple-500'
+                activeTab === 'TRANSFER' && 'bg-indigo-600 hover:bg-indigo-500'
               )}
             >
               <Check className="h-4 w-4" />

@@ -334,11 +334,11 @@ export default function DashboardPage() {
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2">
             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider bg-slate-900/80 border border-slate-800">
-              <span className={cn('h-2 w-2 rounded-full', entity === 'PF' ? 'bg-emerald-400' : entity === 'PJ' ? 'bg-blue-400' : 'bg-purple-400')} />
+              <span className={cn('h-2 w-2 rounded-full', entity === 'PF' ? 'bg-emerald-400' : entity === 'PJ' ? 'bg-blue-400' : 'bg-indigo-400')} />
               <span className={config.textColor}>{config.badge}</span>
               {isSeeded && (
                 <span className="ml-1 text-[10px] text-emerald-400 flex items-center gap-1 font-mono">
-                  <Database className="h-3 w-3" /> Supabase Conectado
+                  <Database className="h-3 w-3" /> Banco de Dados Conectado
                 </span>
               )}
             </div>
@@ -346,7 +346,7 @@ export default function DashboardPage() {
             <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white flex items-center gap-3">
               {entity === 'PF' && <User className="h-8 w-8 text-emerald-400" />}
               {entity === 'PJ' && <Building2 className="h-8 w-8 text-blue-400" />}
-              {entity === 'CONSOLIDATED' && <BarChart3 className="h-8 w-8 text-purple-400" />}
+              {entity === 'CONSOLIDATED' && <BarChart3 className="h-8 w-8 text-indigo-400" />}
               Painel Financeiro {config.shortLabel}
             </h1>
 
@@ -380,11 +380,13 @@ export default function DashboardPage() {
             <button
               onClick={() => setEntity('CONSOLIDATED')}
               className={cn(
-                'px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all',
-                entity === 'CONSOLIDATED' ? 'bg-purple-600 text-white shadow-md' : 'text-slate-400 hover:bg-slate-800'
+                'px-3.5 py-2 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all border',
+                entity === 'CONSOLIDATED'
+                  ? 'bg-zinc-800 text-zinc-100 border-zinc-700 shadow-sm font-bold'
+                  : 'text-zinc-400 hover:text-zinc-200 hover:bg-zinc-800/50 border-transparent'
               )}
             >
-              <BarChart3 className="h-3.5 w-3.5" />
+              <BarChart3 className="h-3.5 w-3.5 text-indigo-400" />
               <span>Consolidado</span>
             </button>
           </div>

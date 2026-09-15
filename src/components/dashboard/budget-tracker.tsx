@@ -80,7 +80,7 @@ export function BudgetTracker({ budgets, categories, monthYear, onRefresh }: Bud
         <button
           type="button"
           onClick={handleOpenNewModal}
-          className="px-3.5 py-1.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-extrabold shadow-md flex items-center gap-1.5 transition-all"
+          className="px-3.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-extrabold shadow-md flex items-center gap-1.5 transition-all"
         >
           <Plus className="h-3.5 w-3.5 stroke-[3]" />
           <span>[ + Definir Orçamento ]</span>
@@ -284,7 +284,7 @@ export function BudgetTracker({ budgets, categories, monthYear, onRefresh }: Bud
               <button
                 type="submit"
                 disabled={isSaving}
-                className="px-4 py-2 rounded-xl bg-purple-600 text-white text-xs font-bold hover:bg-purple-500 shadow-md flex items-center gap-1.5"
+                className="px-4 py-2 rounded-xl bg-emerald-600 text-white text-xs font-bold hover:bg-emerald-500 shadow-md flex items-center gap-1.5"
               >
                 <Save className="h-4 w-4" />
                 <span>{isSaving ? 'Salvando...' : 'Salvar Meta'}</span>
