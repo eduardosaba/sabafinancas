@@ -14,7 +14,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'Mel & Saba Finanças PF/PJ - Controle Financeiro',
+  title: 'Finanças PF/PJ - Controle Financeiro',
   description: 'Gestão Financeira integrada de Pessoa Física e Jurídica.',
   icons: {
     icon: '/icon.svg',

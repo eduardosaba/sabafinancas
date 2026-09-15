@@ -169,9 +169,9 @@ export function FloatingCalculator() {
           setIsMinimized(false);
         }}
         title="Abrir Calculadora Flutuante"
-        className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 p-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow-2xl border border-emerald-400/30 flex items-center gap-2 group transition-all duration-300 hover:scale-105"
+        className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-50 p-3 px-4 rounded-2xl bg-slate-900/90 hover:bg-slate-800 text-slate-200 hover:text-white shadow-xl border border-slate-800 flex items-center gap-2 group transition-all duration-300 hover:scale-105 backdrop-blur-md"
       >
-        <Calculator className="h-5 w-5 transition-transform group-hover:rotate-12" />
+        <Calculator className="h-4 w-4 text-emerald-400 transition-transform group-hover:rotate-12" />
         <span className="text-xs font-bold hidden sm:inline">Calculadora</span>
       </button>
     );

@@ -28,6 +28,34 @@ export const SEED_ACCOUNTS: Omit<Account, 'createdAt'>[] = [
     isActive: true,
   },
   {
+    id: '77777777-7777-7777-7777-777777777777',
+    entityId: '11111111-1111-1111-1111-111111111111',
+    name: 'Cartão Nubank Ultravioleta',
+    accountType: 'CREDIT_CARD',
+    initialBalance: 0.0,
+    currentBalance: -1450.0,
+    colorHex: '#8b5cf6',
+    closingDay: 25,
+    dueDay: 5,
+    creditLimit: 15000.0,
+    cardImageUrl: 'nubank',
+    isActive: true,
+  },
+  {
+    id: '99999999-9999-9999-9999-999999999999',
+    entityId: '11111111-1111-1111-1111-111111111111',
+    name: 'Cartão Itaú Personnalité',
+    accountType: 'CREDIT_CARD',
+    initialBalance: 0.0,
+    currentBalance: -2890.5,
+    colorHex: '#ea580c',
+    closingDay: 20,
+    dueDay: 30,
+    creditLimit: 35000.0,
+    cardImageUrl: 'itau_black',
+    isActive: true,
+  },
+  {
     id: '55555555-5555-5555-5555-555555555555',
     entityId: '22222222-2222-2222-2222-222222222222',
     name: 'Banco Inter PJ',
@@ -45,6 +73,20 @@ export const SEED_ACCOUNTS: Omit<Account, 'createdAt'>[] = [
     initialBalance: 5000.0,
     currentBalance: 12000.0,
     colorHex: '#2563eb',
+    isActive: true,
+  },
+  {
+    id: '88888888-8888-8888-8888-888888888888',
+    entityId: '22222222-2222-2222-2222-222222222222',
+    name: 'Cartão Inter Black Empresarial',
+    accountType: 'CREDIT_CARD',
+    initialBalance: 0.0,
+    currentBalance: -4200.0,
+    colorHex: '#f97316',
+    closingDay: 15,
+    dueDay: 25,
+    creditLimit: 50000.0,
+    cardImageUrl: 'inter_gold',
     isActive: true,
   },
 ];
@@ -84,6 +126,41 @@ export const SEED_CATEGORIES: Omit<Category, 'createdAt'>[] = [
   { id: 'c2222222-2222-2222-2222-ffffffffffff', entityId: '22222222-2222-2222-2222-222222222222', name: 'Manutenção & Equipamentos', nature: 'EXPENSE', icon: 'wrench', colorHex: '#d97706' },
 ];
 
+export async function seedDefaultAccounts(): Promise<boolean> {
+  const supabase = createClient();
+  try {
+    const payload = SEED_ACCOUNTS.map((a) => ({
+      id: a.id,
+      entity_id: a.entityId,
+      name: a.name,
+      account_type: a.accountType,
+      initial_balance: a.initialBalance,
+      current_balance: a.currentBalance,
+      color_hex: a.colorHex,
+      is_active: a.isActive,
+      closing_day: a.closingDay || null,
+      due_day: a.dueDay || null,
+      credit_limit: a.creditLimit || null,
+      card_image_url: a.cardImageUrl || null,
+    }));
+
+    const { error } = await supabase.from('accounts').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.warn('Upsert seed accounts warning:', error.message);
+      // Fallback: try individual inserts if bulk upsert fails
+      for (const item of payload) {
+        try {
+          await supabase.from('accounts').insert(item);
+        } catch {}
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to seed default accounts:', err);
+    return false;
+  }
+}
+
 /**
  * Initializes default user, entities, accounts, and categories in Supabase if empty
  */
@@ -106,59 +183,50 @@ export async function ensureDatabaseSeeded(): Promise<boolean> {
           .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
           .join(' ');
       }
-      await supabase.from('users').upsert(
-        {
-          id: authUser.id,
-          email: authUser.email || `${authUser.id}@user.local`,
-          name: name || 'Usuário',
-        },
-        { onConflict: 'id' }
-      );
+      try {
+        await supabase.from('users').upsert(
+          {
+            id: authUser.id,
+            email: authUser.email || `${authUser.id}@user.local`,
+            name: name || 'Usuário',
+          },
+          { onConflict: 'id' }
+        );
+      } catch {}
     }
 
     // 2. Check entities
     const { data: entities } = await supabase.from('entities').select('id');
     if (!entities || entities.length === 0) {
-      await supabase.from('entities').insert(
-        SEED_ENTITIES.map((e) => ({
-          id: e.id,
-          user_id: authUserId,
-          name: e.name,
-          type: e.type,
-        }))
-      );
+      try {
+        await supabase.from('entities').insert(
+          SEED_ENTITIES.map((e) => ({
+            id: e.id,
+            user_id: authUserId,
+            name: e.name,
+            type: e.type,
+          }))
+        );
+      } catch {}
     }
 
-    // 3. Check accounts
-    const { data: accounts } = await supabase.from('accounts').select('id');
-    if (!accounts || accounts.length === 0) {
-      await supabase.from('accounts').insert(
-        SEED_ACCOUNTS.map((a) => ({
-          id: a.id,
-          entity_id: a.entityId,
-          name: a.name,
-          account_type: a.accountType,
-          initial_balance: a.initialBalance,
-          current_balance: a.currentBalance,
-          color_hex: a.colorHex,
-          is_active: a.isActive,
-        }))
-      );
-    }
+    // 3. Accounts are created dynamically by the user in Supabase
 
     // 4. Check categories
     const { data: categories } = await supabase.from('categories').select('id');
     if (!categories || categories.length === 0) {
-      await supabase.from('categories').insert(
-        SEED_CATEGORIES.map((c) => ({
-          id: c.id,
-          entity_id: c.entityId,
-          name: c.name,
-          nature: c.nature,
-          icon: c.icon,
-          color_hex: c.colorHex,
-        }))
-      );
+      try {
+        await supabase.from('categories').insert(
+          SEED_CATEGORIES.map((c) => ({
+            id: c.id,
+            entity_id: c.entityId,
+            name: c.name,
+            nature: c.nature,
+            icon: c.icon,
+            color_hex: c.colorHex,
+          }))
+        );
+      } catch {}
     }
 
     return true;
@@ -167,3 +235,4 @@ export async function ensureDatabaseSeeded(): Promise<boolean> {
     return false;
   }
 }
+

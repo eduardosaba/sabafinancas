@@ -51,7 +51,7 @@ import {
   payCreditCardInvoice,
 } from '@/lib/services/finance-service';
 import { calculateCreditCardMetrics } from '@/lib/utils/credit-card';
-import { ensureDatabaseSeeded } from '@/lib/supabase/seed';
+import { ensureDatabaseSeeded, seedDefaultAccounts } from '@/lib/supabase/seed';
 import { cn } from '@/lib/utils';
 
 import { useToast } from '@/contexts/toast-context';
@@ -287,17 +287,24 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      
+
       {/* No Accounts Warning Banner */}
       {!isLoading && accounts.length === 0 && (
-        <div className="p-4 rounded-2xl bg-amber-950/80 border border-amber-500/60 text-amber-200 text-xs font-semibold flex items-center justify-between shadow-xl">
+        <div className="p-4 rounded-2xl bg-amber-950/80 border border-amber-500/60 text-amber-200 text-xs font-semibold flex items-center justify-between shadow-xl flex-wrap gap-3">
           <div className="flex items-center gap-3">
             <AlertTriangle className="h-6 w-6 text-amber-400 flex-shrink-0" />
             <div>
-              <div className="text-sm font-bold text-amber-100">Nenhuma Conta Carregada do Supabase</div>
-              <div>Não há contas bancárias cadastradas no banco de dados. Acesse Configurações &gt; Contas para cadastrar sua primeira conta.</div>
+              <div className="text-sm font-bold text-amber-100">Nenhuma Conta Cadastrada no Supabase</div>
+              <div>Não há contas bancárias ou cartões de crédito cadastrados no banco de dados. Acesse Configurações &gt; Contas para cadastrar suas contas reais.</div>
             </div>
           </div>
+          <Link
+            href="/settings/accounts"
+            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-amber-950 font-bold text-xs transition-colors shadow flex items-center gap-1.5"
+          >
+            <CreditCard className="h-3.5 w-3.5" />
+            <span>Cadastrar Minha Primeira Conta</span>
+          </Link>
         </div>
       )}
 
@@ -389,7 +396,7 @@ export default function DashboardPage() {
         <div className="flex items-center justify-between">
           <span className="text-xs font-bold text-slate-300 uppercase tracking-wider flex items-center gap-2">
             <Sparkles className="h-4 w-4 text-emerald-400" />
-            Lançamento Rápido em Linguagem Natural (Zero Tokens & Supabase DB)
+            Lançamento Rápido
           </span>
           <button
             onClick={loadData}
@@ -409,7 +416,7 @@ export default function DashboardPage() {
 
       {/* Metrics Summary */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-        
+
         {/* Receitas */}
         <div className="p-5 rounded-2xl bg-slate-900 border border-slate-800 shadow-md">
           <div className="flex items-center justify-between mb-3">
@@ -667,7 +674,7 @@ export default function DashboardPage() {
 
       {/* FASE 4: VISUAL CHARTS GRID */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
+
         {/* Cash Flow Timeline Chart */}
         <div className="p-6 rounded-2xl bg-slate-900 border border-slate-800 shadow-xl space-y-3">
           <div className="flex items-center justify-between border-b border-slate-800 pb-3">

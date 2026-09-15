@@ -9,7 +9,7 @@ import { createClient } from '@/lib/supabase/client';
 import { translateAuthError } from '@/lib/auth-errors';
 import { cn } from '@/lib/utils';
 
-export default function LoginPage() {
+export default function LoginPage({ forceFamilyMode }: { forceFamilyMode?: boolean }) {
   const router = useRouter();
   const [loginInput, setLoginInput] = useState('');
   const [password, setPassword] = useState('');
@@ -18,28 +18,34 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false);
 
   // Dynamic subdomain & mode detection
-  const [isFamilyMode, setIsFamilyMode] = useState<boolean>(false);
+  const [isFamilyMode, setIsFamilyMode] = useState<boolean>(Boolean(forceFamilyMode));
   const [modeLoaded, setModeLoaded] = useState<boolean>(false);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
-      const hostname = window.location.hostname;
       const search = window.location.search;
-      const storedFamily = localStorage.getItem('modo_familia');
+      const pathname = window.location.pathname;
 
+      if (search.includes('logout=true')) {
+        const supabase = createClient();
+        supabase.auth.signOut().catch(() => { });
+      }
+
+      // Family / Mel & Saba mode active on /login/melesaba, /melesaba, /login/familia, or via query params (?acesso=melesaba, ?acesso=familia)
       const isFamily =
-        hostname.includes('saba') ||
+        Boolean(forceFamilyMode) ||
+        pathname.includes('/melesaba') ||
+        pathname.includes('/familia') ||
+        search.includes('acesso=melesaba') ||
+        search.includes('melesaba=true') ||
         search.includes('acesso=familia') ||
-        search.includes('rapido=true') ||
-        storedFamily === 'true';
+        search.includes('familia=true') ||
+        search.includes('rapido=true');
 
       setIsFamilyMode(isFamily);
-      if (search.includes('acesso=familia') || search.includes('rapido=true')) {
-        localStorage.setItem('modo_familia', 'true');
-      }
       setModeLoaded(true);
     }
-  }, []);
+  }, [forceFamilyMode]);
 
   const cleanInput = loginInput.trim().toLowerCase();
   const isEduardo = cleanInput === 'eduardosaba' || cleanInput === 'eduardo';
@@ -70,13 +76,13 @@ export default function LoginPage() {
         password,
       });
 
-      // If user doesn't exist yet in Supabase Auth (e.g. initial melsaba login), auto-signup
-      if (error && (cleanInput.includes('melsaba') || cleanInput.includes('mel'))) {
+      // If user doesn't exist yet in Supabase Auth (e.g. initial login), auto-signup
+      if (error && (isEduardo || isMel || cleanInput.includes('saba'))) {
         const { error: signUpError } = await supabase.auth.signUp({
           email: targetEmail,
           password,
           options: {
-            data: { name: 'Mel Saba' },
+            data: { name: displayName },
           },
         });
 
@@ -115,7 +121,7 @@ export default function LoginPage() {
             <Wallet className="h-6 w-6" />
           </div>
           <h1 className="text-2xl font-extrabold tracking-tight text-white">
-            {isFamilyMode ? 'Mel & Saba Finanças PF / PJ' : 'Meu Financeiro PF / PJ'}
+            {isFamilyMode ? 'Finanças PF / PJ' : 'Meu Financeiro PF / PJ'}
           </h1>
           <p className="text-xs text-slate-400">
             {isFamilyMode

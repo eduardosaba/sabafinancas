@@ -471,3 +471,56 @@ html.light .floating-calculator-btn-action:hover {
 .animate-float-money {
   animation: floatMoney linear infinite;
 }
+
+/* -------------------------------------------------------------
+   COLOR PRESET THEMES (Graphite & Mint, Titanium & Cobalt, Deep Onyx & Gold)
+   ------------------------------------------------------------- */
+
+/* Preset 1: Graphite & Mint (Linear / Stripe style - Recommended) */
+[data-color-preset="graphite-mint"] body,
+[data-color-preset="graphite-mint"] main {
+  background-color: #09090b !important;
+}
+[data-color-preset="graphite-mint"] aside,
+[data-color-preset="graphite-mint"] header {
+  background-color: #09090b !important;
+  border-color: #27272a !important;
+}
+[data-color-preset="graphite-mint"] main .bg-slate-900,
+[data-color-preset="graphite-mint"] main [class*="bg-slate-900"] {
+  background-color: #121215 !important;
+  border-color: #27272a !important;
+}
+
+/* Preset 2: Titanium & Cobalt (Corporate / Nubank PJ style) */
+[data-color-preset="titanium-cobalt"] body,
+[data-color-preset="titanium-cobalt"] main {
+  background-color: #0b0f19 !important;
+}
+[data-color-preset="titanium-cobalt"] aside,
+[data-color-preset="titanium-cobalt"] header {
+  background-color: #0b0f19 !important;
+  border-color: #1e293b !important;
+}
+[data-color-preset="titanium-cobalt"] main .bg-slate-900,
+[data-color-preset="titanium-cobalt"] main [class*="bg-slate-900"] {
+  background-color: #111827 !important;
+  border-color: #1e293b !important;
+}
+
+/* Preset 3: Deep Onyx & Warm Gold (Private Banking style) */
+[data-color-preset="deep-onyx-gold"] body,
+[data-color-preset="deep-onyx-gold"] main {
+  background-color: #050505 !important;
+}
+[data-color-preset="deep-onyx-gold"] aside,
+[data-color-preset="deep-onyx-gold"] header {
+  background-color: #050505 !important;
+  border-color: #262626 !important;
+}
+[data-color-preset="deep-onyx-gold"] main .bg-slate-900,
+[data-color-preset="deep-onyx-gold"] main [class*="bg-slate-900"] {
+  background-color: #121212 !important;
+  border-color: #262626 !important;
+}
+

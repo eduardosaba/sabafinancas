@@ -56,7 +56,7 @@ export function SplashScreen() {
 
   // Status subtext based on progress %
   const getStatusText = () => {
-    if (progress < 30) return 'Carregando ecossistema de finanças...';
+    if (progress < 30) return 'Carregando finanças PF/PJ...';
     if (progress < 65) return 'Carregando contas, saldos e cartões de crédito...';
     if (progress < 95) return 'Carregando orçamentos e DRE...';
     return 'Tudo pronto!';
@@ -87,7 +87,7 @@ export function SplashScreen() {
         {/* App Title & Subtitle */}
         <div className="space-y-1">
           <h1 className="text-2xl sm:text-3xl font-black tracking-tight bg-gradient-to-r from-emerald-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
-            Mel & Saba Finanças PF / PJ
+            Minhas Finanças PF / PJ
           </h1>
           <p className="text-xs text-slate-400 flex items-center justify-center gap-1.5 font-medium">
             <ShieldCheck className="h-4 w-4 text-emerald-400" />

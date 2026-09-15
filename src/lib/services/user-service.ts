@@ -205,7 +205,7 @@ export async function checkUserAccessStatus(emailOrId?: string): Promise<UserAcc
     }
 
     // Admins nunca são bloqueados por licença
-    const isAdmin = profile.role === 'ADMIN' || user.email?.includes('eduardo') || user.email?.includes('mel');
+    const isAdmin = profile.role === 'ADMIN' || user.email === 'eduardopedro.fsa@gmail.com';
     if (isAdmin) {
       return {
         canAccess: true,

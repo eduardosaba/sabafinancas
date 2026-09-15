@@ -32,6 +32,7 @@ import { TransactionModal } from '@/components/transactions/transaction-modal';
 import { CompanyModal } from '@/components/companies/company-modal';
 import { PendingPaymentsSidebarWidget } from '@/components/layout/pending-sidebar-widget';
 import { fetchAccounts, fetchCategories, ensureUserExistsInDb } from '@/lib/services/finance-service';
+import { checkUserAccessStatus } from '@/lib/services/user-service';
 import { createClient } from '@/lib/supabase/client';
 import { Account, Category } from '@/types/finance';
 import { cn } from '@/lib/utils';
@@ -62,9 +63,14 @@ export function Header() {
 
   const isPjActive = entity !== 'PF' && entity !== '11111111-1111-1111-1111-111111111111' && entity !== 'CONSOLIDATED';
 
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
   React.useEffect(() => {
     async function loadUser() {
       try {
+        const access = await checkUserAccessStatus();
+        setIsAdmin(access.role === 'ADMIN');
+
         const supabase = createClient();
         const {
           data: { user },
@@ -114,6 +120,11 @@ export function Header() {
     }
     loadUser();
   }, []);
+
+  const mobileNavItems = NAVIGATION_ITEMS.filter((item) => {
+    if (item.href === '/settings/users') return isAdmin;
+    return true;
+  });
 
   const userInitials = useMemo(() => {
     if (!userName) return 'US';
@@ -291,13 +302,13 @@ export function Header() {
                 type="button"
                 onClick={() => setEntity('CONSOLIDATED')}
                 className={cn(
-                  'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200',
+                  'flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 border',
                   entity === 'CONSOLIDATED'
-                    ? 'bg-purple-600 text-white shadow-md shadow-purple-950 ring-1 ring-purple-400/50'
-                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+                    ? 'bg-violet-950/40 text-violet-300 border-violet-800/50 shadow-sm font-bold'
+                    : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60 border-transparent'
                 )}
               >
-                <BarChart3 className="h-3.5 w-3.5" />
+                <BarChart3 className="h-3.5 w-3.5 text-violet-400" />
                 <span>Consolidado</span>
               </button>
             </div>
@@ -485,13 +496,13 @@ export function Header() {
               type="button"
               onClick={() => setEntity('CONSOLIDATED')}
               className={cn(
-                'flex-1 flex items-center justify-center gap-1 py-1 px-2 rounded-lg text-xs font-bold transition-all',
+                'flex-1 flex items-center justify-center gap-1 py-1 px-2 rounded-lg text-xs font-bold transition-all border',
                 entity === 'CONSOLIDATED'
-                  ? 'bg-purple-600 text-white shadow'
-                  : 'text-slate-400 hover:text-slate-200'
+                  ? 'bg-violet-950/40 text-violet-300 border-violet-800/50 shadow'
+                  : 'text-slate-400 hover:text-slate-200 border-transparent'
               )}
             >
-              <BarChart3 className="h-3.5 w-3.5" />
+              <BarChart3 className="h-3.5 w-3.5 text-violet-400" />
               <span>Consolid.</span>
             </button>
           </div>
@@ -576,11 +587,13 @@ export function Header() {
                     setIsMobileMenuOpen(false);
                   }}
                   className={cn(
-                    'py-2 px-1 rounded-lg text-xs font-bold text-center transition-all flex flex-col items-center gap-1',
-                    entity === 'CONSOLIDATED' ? 'bg-purple-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                    'py-2 px-1 rounded-lg text-xs font-bold text-center transition-all flex flex-col items-center gap-1 border',
+                    entity === 'CONSOLIDATED'
+                      ? 'bg-violet-950/40 text-violet-300 border-violet-800/50 shadow'
+                      : 'text-slate-400 hover:text-white border-transparent'
                   )}
                 >
-                  <BarChart3 className="h-4 w-4" />
+                  <BarChart3 className="h-4 w-4 text-violet-400" />
                   <span>Consolid.</span>
                 </button>
               </div>
@@ -591,7 +604,7 @@ export function Header() {
               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block px-2 mb-2">
                 Páginas Principais
               </span>
-              {NAVIGATION_ITEMS.map((item) => {
+              {mobileNavItems.map((item) => {
                 const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
                 const Icon = item.icon;
                 return (
@@ -729,6 +742,20 @@ export const NAVIGATION_ITEMS = [
 export function Sidebar() {
   const pathname = usePathname();
   const { entity, config } = useEntity();
+  const [isAdmin, setIsAdmin] = useState<boolean>(false);
+
+  React.useEffect(() => {
+    async function checkRole() {
+      const access = await checkUserAccessStatus();
+      setIsAdmin(access.role === 'ADMIN');
+    }
+    checkRole();
+  }, []);
+
+  const navItems = NAVIGATION_ITEMS.filter((item) => {
+    if (item.href === '/settings/users') return isAdmin;
+    return true;
+  });
 
   return (
     <aside className="hidden lg:flex w-64 flex-col border-r border-slate-800 bg-slate-950 p-4 min-h-[calc(100vh-4rem)]">
@@ -754,7 +781,7 @@ export function Sidebar() {
         <div className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider px-3 mb-2">
           Menu Principal
         </div>
-        {NAVIGATION_ITEMS.map((item) => {
+        {navItems.map((item) => {
           const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href));
           const Icon = item.icon;
           return (
