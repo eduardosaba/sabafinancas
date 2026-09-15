@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   Receipt,
@@ -50,7 +50,7 @@ import {
 import { CurrencyInput } from '@/components/ui/currency-input';
 import { cn } from '@/lib/utils';
 
-export default function TransactionsPage() {
+function TransactionsContent() {
   const { entity, config, isHydrated, pjEntities, activeCompany } = useEntity();
   const { filter } = useDateFilter();
   const { toast } = useToast();
@@ -1174,5 +1174,20 @@ export default function TransactionsPage() {
         onSuccess={loadData}
       />
     </div>
+  );
+}
+
+export default function TransactionsPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="p-8 text-center text-slate-400 text-xs flex items-center justify-center gap-2">
+          <Clock className="h-4 w-4 animate-spin text-emerald-400" />
+          <span>Carregando extrato...</span>
+        </div>
+      }
+    >
+      <TransactionsContent />
+    </Suspense>
   );
 }
